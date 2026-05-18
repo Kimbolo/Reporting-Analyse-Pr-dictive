@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
 from db import get_data
 
 sns.set_style("whitegrid")
@@ -49,24 +51,28 @@ st.info(
 # =========================================================
 st.markdown("## Dynamique du chiffre d’affaires")
 
-ca_mensuel = facture.groupby("MOIS_NOM", sort=False)["MONTANT_NET"].sum()
-variation = ca_mensuel.pct_change() * 100
+ca_mensuel = facture.groupby("MOIS_NOM", sort=False)["MONTANT_NET"].sum().reset_index()
+variation = ca_mensuel["MONTANT_NET"].pct_change() * 100
 
-fig, ax = plt.subplots(figsize=(10, 4))
-sns.lineplot(
-    x=ca_mensuel.index,
-    y=ca_mensuel.values,
-    marker="o",
-    linewidth=3,
-    color="#1f77b4",
-    ax=ax
+# Graphique interactif avec Plotly
+fig_ca = px.line(
+    ca_mensuel, 
+    x="MOIS_NOM", 
+    y="MONTANT_NET",
+    markers=True,
+    title="Évolution mensuelle du chiffre d’affaires"
 )
-ax.grid(axis="y", linestyle="--", alpha=0.6)
-ax.set_title("Évolution mensuelle du chiffre d’affaires")
-ax.set_xlabel("Mois")
-ax.set_ylabel("CA")
-plt.xticks(rotation=45)
-st.pyplot(fig)
+fig_ca.update_traces(
+    hovertemplate='<b>%{x}</b><br>' +
+                  'CA: %{y:,.0f} €<br>' +
+                  '<extra></extra>'
+)
+fig_ca.update_layout(
+    xaxis_title="Mois",
+    yaxis_title="Chiffre d'affaires (€)",
+    hovermode='x unified'
+)
+st.plotly_chart(fig_ca, use_container_width=True)
 
 st.markdown("### Lecture")
 st.markdown(
@@ -84,6 +90,8 @@ df_personne = get_data("SELECT ID_PERSONNE, NOM FROM personne")
 facture_client = facture.merge(df_personne, on="ID_PERSONNE", how="left")
 facture_client["NOM"] = facture_client["NOM"].fillna("Client inconnu")
 
+df_magasin = get_data("SELECT ID_MAGASIN, NOM_MAGASIN FROM magasin")
+
 ca_client = (
     facture_client.groupby("NOM")["MONTANT_NET"]
     .sum()
@@ -93,18 +101,19 @@ ca_client = (
 top5 = ca_client.head(5)
 top10 = ca_client.head(10)
 
-fig, ax = plt.subplots(figsize=(10, 5))
-sns.barplot(
+# Graphique interactif avec Plotly
+fig_clients = px.bar(
     x=top10.values,
     y=top10.index,
-    palette="Blues_r",
-    ax=ax
+    color_discrete_sequence=["blue"],
+    title="Top 10 clients par chiffre d’affaires"
 )
-ax.grid(axis="x", linestyle="--", alpha=0.6)
-ax.set_title("Top 10 clients par chiffre d’affaires")
-ax.set_xlabel("CA")
-ax.set_ylabel("Client")
-st.pyplot(fig)
+fig_clients.update_layout(
+    xaxis_title="Chiffre d'affaires (€)",
+    yaxis_title="Client",
+    hovermode='y unified'
+)
+st.plotly_chart(fig_clients, use_container_width=True)
 
 part_top5 = top5.sum() / ca_client.sum() * 100
 part_top10 = top10.sum() / ca_client.sum() * 100
@@ -133,17 +142,26 @@ if "ID_PRODUIT" in facture.columns:
         .sort_values(ascending=False)
         .head(10)
     )
-
-    fig, ax = plt.subplots(figsize=(10, 4))
-    sns.barplot(
-        x=ca_produit.values,
-        y=ca_produit.index.astype(str),
-        palette="Greens_r",
-        ax=ax
+    
+    # Afficher les top produits
+    df_produits = pd.DataFrame({
+        'Produit': ca_produit.index.astype(str),
+        'CA': ca_produit.values
+    })
+    
+    fig_produits = px.bar(
+        df_produits,
+        x='CA',
+        y='Produit',
+        orientation='h',
+        title="Top 10 produits par chiffre d'affaires",
+        color='CA',
+        color_continuous_scale='Blues'
     )
-    ax.grid(axis="x", linestyle="--", alpha=0.6)
-    ax.set_title("Top articles par chiffre d’affaires")
-    st.pyplot(fig)
+    fig_produits.update_traces(
+        hovertemplate='<b>%{y}</b><br>CA: %{x:,.0f} €<extra></extra>'
+    )
+    st.plotly_chart(fig_produits, use_container_width=True)
 
     st.markdown(
         "- Quelques articles tirent majoritairement la performance\n"
@@ -157,8 +175,38 @@ else:
 # =========================================================
 st.markdown("## Stock & impact sur les ventes")
 
-stock_mag = stock.groupby("ID_MAGASIN")["QUANTITE"].sum()
-st.bar_chart(stock_mag)
+# Fusionner stock avec les noms des magasins
+if 'df_magasin' in locals():
+    stock_with_names = stock.merge(df_magasin, on="ID_MAGASIN", how="left")
+    # Remplacer les ID manquants par "Magasin inconnu"
+    stock_with_names["NOM_MAGASIN"] = stock_with_names["NOM_MAGASIN"].fillna(f"Magasin {stock_with_names['ID_MAGASIN']}")
+    
+    # Grouper par nom de magasin
+    stock_mag = stock_with_names.groupby("NOM_MAGASIN")["QUANTITE"].sum().sort_values(ascending=False)
+else:
+    # Fallback si la table magasin n'existe pas
+    stock_mag = stock.groupby("ID_MAGASIN")["QUANTITE"].sum()
+    stock_mag.index = [f"Magasin {idx}" for idx in stock_mag.index]
+
+# Créer un graphique Plotly pour meilleur affichage (avec tooltips)
+fig_stock = px.bar(
+    x=stock_mag.values,
+    y=stock_mag.index,
+    orientation='h',
+    title="Niveau de stock par magasin",
+    color=stock_mag.values,
+    color_continuous_scale='Reds',
+    labels={'x': 'Quantité en stock', 'y': 'Magasin'}
+)
+fig_stock.update_traces(
+    hovertemplate='<b>%{y}</b><br>Stock: %{x:,.0f} unités<extra></extra>'
+)
+fig_stock.update_layout(
+    height=400,
+    xaxis_title="Quantité en stock",
+    yaxis_title="Magasin"
+)
+st.plotly_chart(fig_stock, use_container_width=True)
 
 st.markdown(
     "- Des ventes faibles combinées à un faible stock suggèrent une contrainte d’approvisionnement\n"
@@ -170,21 +218,62 @@ st.markdown(
 # =========================================================
 st.markdown("## Ventes vs Encaissements")
 
-enc_mensuel = paiement.groupby("MOIS_NOM", sort=False)["MONTANT"].sum()
-df_cash = pd.DataFrame({
-    "CA": ca_mensuel,
-    "Encaissements": enc_mensuel
-}).fillna(0)
+# Calculer les encaissements par mois
+enc_mensuel = paiement.groupby("MOIS_NOM", sort=False)["MONTANT"].sum().reset_index()
+enc_mensuel.columns = ['MOIS_NOM', 'Encaissements']
 
-fig, ax = plt.subplots(figsize=(10, 4))
-sns.lineplot(x=df_cash.index, y=df_cash["CA"], label="CA", ax=ax)
-sns.lineplot(x=df_cash.index, y=df_cash["Encaissements"], label="Encaissements", ax=ax)
-ax.grid(axis="y", linestyle="--", alpha=0.6)
-ax.set_title("Décalage CA vs Trésorerie")
-plt.xticks(rotation=45)
-st.pyplot(fig)
+# S'assurer que ca_mensuel est un DataFrame avec les bonnes colonnes
+if isinstance(ca_mensuel, pd.Series):
+    ca_mensuel = ca_mensuel.reset_index()
+    ca_mensuel.columns = ['MOIS_NOM', 'CA']
+elif 'MONTANT_NET' in ca_mensuel.columns:
+    ca_mensuel = ca_mensuel[['MOIS_NOM', 'MONTANT_NET']]
+    ca_mensuel.columns = ['MOIS_NOM', 'CA']
 
-taux_enc = df_cash["Encaissements"].sum() / df_cash["CA"].sum() * 100
+df_cash = pd.merge(ca_mensuel, enc_mensuel, on='MOIS_NOM', how='outer').fillna(0)
+
+# Vérifier que l'ordre des mois est correct
+ordre_mois = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", 
+              "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+df_cash['MOIS_NOM'] = pd.Categorical(df_cash['MOIS_NOM'], categories=ordre_mois, ordered=True)
+df_cash = df_cash.sort_values('MOIS_NOM')
+
+# Graphique avec deux lignes séparées
+fig_cash = go.Figure()
+
+# Ajouter la ligne du CA
+fig_cash.add_trace(go.Scatter(
+    x=df_cash['MOIS_NOM'],
+    y=df_cash['CA'],
+    name='Chiffre d\'affaires',
+    mode='lines+markers',
+    line=dict(color='blue', width=2),
+    marker=dict(size=8),
+    hovertemplate='<b>%{x}</b><br>CA: %{y:,.0f} €<extra></extra>'
+))
+
+# Ajouter la ligne des encaissements
+fig_cash.add_trace(go.Scatter(
+    x=df_cash['MOIS_NOM'],
+    y=df_cash['Encaissements'],
+    name='Encaissements',
+    mode='lines+markers',
+    line=dict(color='green', width=2),
+    marker=dict(size=8),
+    hovertemplate='<b>%{x}</b><br>Encaissements: %{y:,.0f} €<extra></extra>'
+))
+
+fig_cash.update_layout(
+    title="Décalage CA vs Trésorerie",
+    xaxis_title="Mois",
+    yaxis_title="Montant (€)",
+    hovermode='x unified',
+    legend=dict(x=0, y=1, orientation='h')
+)
+
+st.plotly_chart(fig_cash, use_container_width=True)
+
+taux_enc = df_cash["Encaissements"].sum() / df_cash["CA"].sum() * 100 if df_cash["CA"].sum() > 0 else 0
 
 st.markdown(
     f"- Taux d’encaissement global : **{taux_enc:.1f} %**\n"

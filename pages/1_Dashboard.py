@@ -3,12 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from db import get_data
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
 
 sns.set_style("whitegrid")
 
 # ===============================
 # CHARGEMENT DES DONNÉES BDD
 # ===============================
+
 df_conditionnement = get_data("""
     SELECT
         DATE_PRODUCTION,
@@ -92,6 +96,27 @@ def format_cfa(valeur):
     if valeur is None:
         return "0 FCFA"
     return f"{valeur:,.0f}".replace(",", " ") + " FCFA"
+
+PLOTLY_CONFIG = {
+    'displayModeBar': True,
+    'modeBarButtonsToRemove': ['zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d'],
+    'displaylogo': False,
+    'responsive': True,
+}
+
+COLORS = {
+    'primary': '#1f77b4',
+    'secondary': '#ff7f0e',
+    'success': '#2ca02c',
+    'danger': '#d62728',
+    'warning': '#ffbb78',
+    'purple': '#9467bd',
+    'brown': '#8c564b',
+    'pink': '#e377c2',
+    'gray': '#7f7f7f',
+    'olive': '#bcbd22',
+    'cyan': '#17becf'
+}
 
 sns.set_style("whitegrid")
 
@@ -210,115 +235,159 @@ if analyse_type == "Ventes":
         .sum()
     )
 
-    fig, ax = plt.subplots(figsize=(9, 4))
-    sns.lineplot(
-        x=ca_mensuel.index,
-        y=ca_mensuel.values,
-        marker="o",
-        linewidth=3,
-        color="#1f77b4",
-        ax=ax
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x=ca_mensuel.index.tolist(),
+        y=ca_mensuel.values.tolist(),
+        mode="lines+markers",
+        name='CA mensuel',
+        line=dict(color=COLORS['primary'],width=3),
+        marker=dict(size=8, symbol='circle', color="#1f77b4"),
+        hovertemplate='<b>%{x}</b><br>CA: %{y:,.0f} FCFA<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title=dict(text="Évolution mensuelle du chiffre d’affaires", x=0.5, font=dict(size=16)),
+        xaxis_title="Mois",
+        yaxis_title="Chiffre d’affaires (FCFA)",
+        hovermode="x unified",
+        template="plotly_white",
+        height=400,
+        margin=dict(l=50, r=50, t=80, b=50),
+        xaxis=dict(tickangle=45),
+        yaxis=dict(tickformat=",.0f", tickprefix='', ticksuffix=' FCFA')
     )
 
-    ax.set_title("Évolution mensuelle du chiffre d’affaires", fontsize=14, weight="bold")
-    ax.set_xlabel("Mois")
-    ax.set_ylabel("Chiffre d’affaires (FCFA)")
-    ax.grid(axis="y", linestyle="--", alpha=0.6)
-    plt.xticks(rotation=45)
-
-    st.pyplot(fig)
+    st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
  
     st.info(
         "Cette courbe met en évidence les périodes de croissance ou de ralentissement "
         "de l’activité commerciale."
     )
 
-# ===============================
-# ÉVOLUTION DES PRODUCTIONS
-# ===============================
+    # ===============================
+    # ÉVOLUTION DES PRODUCTIONS
+    # ===============================
     st.subheader("Évolution des productions")
 
-if "QUANTITE_PRODUITE" in stock.columns and "DATE_PRODUCTION" in stock.columns:
-    stock["DATE_PRODUCTION"] = pd.to_datetime(
-        stock["DATE_PRODUCTION"], errors="coerce"
-    )
-    stock["MOIS_NUM"] = stock["DATE_PRODUCTION"].dt.month
-    stock["MOIS_NOM"] = stock["MOIS_NUM"].map(MOIS_FR)
+    if "QUANTITE_PRODUITE" in stock.columns and "DATE_PRODUCTION" in stock.columns:
+        stock["DATE_PRODUCTION"] = pd.to_datetime(
+            stock["DATE_PRODUCTION"], errors="coerce"
+        )
+        stock["MOIS_NUM"] = stock["DATE_PRODUCTION"].dt.month
+        stock["MOIS_NOM"] = stock["MOIS_NUM"].map(MOIS_FR)
 
-    prod_mensuelle = (
-        stock
-        .groupby("MOIS_NOM", sort=False)["QUANTITE_PRODUITE"]
-        .sum()
-    )
+        prod_mensuelle = (
+            stock
+            .groupby("MOIS_NOM", sort=False)["QUANTITE_PRODUITE"]
+            .sum()
+        )
 
-    fig, ax = plt.subplots(figsize=(9, 4))
-    sns.lineplot(
-        x=prod_mensuelle.index,
-        y=prod_mensuelle.values,
-        marker="o",
-        linewidth=3,
-        color="#ff7f0e",
-        ax=ax
-    )
-    ax.set_ylabel("Quantité produite")
-    ax.set_xlabel("Mois")
-    ax.grid(axis="y", linestyle="--", alpha=0.6)
-    plt.xticks(rotation=45)
-    st.pyplot(fig)
-else:
-    st.info("Données de production non disponibles.")
+        fig = go.Figure()
 
-    st.divider()
+        fig.add_trace(go.Scatter(
+            x=prod_mensuelle.index.tolist(),
+            y=prod_mensuelle.values.tolist(),
+            mode="lines+markers",
+            name='Production',
+            line=dict(color=COLORS['secondary'],width=3),
+            marker=dict(size=8, symbol='square', color="#ff7f0e"),
+            hovertemplate='<b>%{x}</b><br>Production: %{y:,.0f} unités<extra></extra>'
+        ))
 
-# ===============================
-# FLUX COMMANDES / LIVRAISONS
-# ===============================
+        fig.update_layout(
+            title=dict(text="Évolution mensuelle de la production", x=0.5, font=dict(size=16)),
+            xaxis_title="Mois",
+            yaxis_title="Quantité produite",
+            hovermode="x unified",
+            template="plotly_white",
+            height=400,
+            margin=dict(l=50, r=50, t=80, b=50),
+            xaxis=dict(tickangle=45),
+        )
+
+        st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+        st.divider()
+
+    # ===============================
+    # FLUX COMMANDES / LIVRAISONS
+    # ===============================
     st.subheader("Flux commandes & livraisons")
 
-if not facture.empty:
-    nb_commandes = facture["ID_FACTURE_CLIENT"].nunique()
-    nb_livraisons = stock["ID_MAGASIN"].nunique()
+    if not facture.empty:
+        nb_commandes = facture["ID_FACTURE_CLIENT"].nunique()
+        nb_livraisons = stock["ID_MAGASIN"].nunique() if "ID_MAGASIN" in stock.columns else 0
 
-    col_x, col_y = st.columns(2)
-    col_x.metric("Commandes traitées", nb_commandes)
-    col_y.metric("Points de livraison actifs", nb_livraisons)
+        col_x, col_y = st.columns(2)
+        col_x.metric("Commandes traitées", nb_commandes)
+        col_y.metric("Points de livraison actifs", nb_livraisons)
 
-    st.caption(
-        "Ces indicateurs donnent une vision synthétique du flux opérationnel "
-        "entre commandes clients et livraisons."
-    )
+        st.caption(
+            "Ces indicateurs donnent une vision synthétique du flux opérationnel "
+            "entre commandes clients et livraisons."
+        )
 
-
-# ===============================
-# COMPARATIF VENTES VS PRODUCTIONS
-# ===============================
+    # ===============================
+    # COMPARATIF VENTES VS PRODUCTIONS
+    # ===============================
     st.subheader("Ventes vs Productions")
 
-if "QUANTITE_PRODUITE" in stock.columns:
-    df_compare = pd.DataFrame({
-        "Ventes": ca_mensuel,
-        "Production": prod_mensuelle
-    }).fillna(0)
+    if "QUANTITE_PRODUITE" in stock.columns and "DATE_PRODUCTION" in stock.columns:
+        stock["DATE_PRODUCTION"] = pd.to_datetime(stock["DATE_PRODUCTION"], errors="coerce")
+        stock["MOIS_NUM"] = stock["DATE_PRODUCTION"].dt.month
+        stock["MOIS_NOM"] = stock["MOIS_NUM"].map(MOIS_FR)
+        prod_mensuelle = stock.groupby("MOIS_NOM", sort=False)["QUANTITE_PRODUITE"].sum()
+        
+        if not prod_mensuelle.empty and not ca_mensuel.empty:
+            df_compare = pd.DataFrame({
+                "Ventes": ca_mensuel,
+                "Production": prod_mensuelle
+            }).fillna(0)
 
-    fig, ax = plt.subplots(figsize=(9, 4))
-    sns.lineplot(x=df_compare.index, y=df_compare["Ventes"], label="Ventes", ax=ax)
-    sns.lineplot(x=df_compare.index, y=df_compare["Production"], label="Production", ax=ax)
+            fig = go.Figure()
 
-    ax.set_ylabel("Volume / Valeur")
-    ax.grid(axis="y", linestyle="--", alpha=0.6)
-    plt.xticks(rotation=45)
-    st.pyplot(fig)
+            fig.add_trace(go.Scatter(
+                x=df_compare.index.tolist(),
+                y=df_compare["Ventes"].values.tolist(),
+                mode="lines+markers",
+                name='Ventes',
+                line=dict(color=COLORS['primary'],width=3),
+                marker=dict(size=8, symbol='circle', color="#1f77b4"),
+                hovertemplate='<b>%{x}</b><br>Ventes: %{y:,.0f} FCFA<extra></extra>'
+            ))
 
-    st.caption(
-        "Ce graphique permet d’identifier les écarts entre capacité de production "
-        "et volumes effectivement vendus."
-    )
+            fig.add_trace(go.Scatter(
+                x=df_compare.index.tolist(),
+                y=df_compare["Production"].tolist(),
+                mode="lines+markers",
+                name='Production',
+                line=dict(color=COLORS['secondary'],width=3, dash='dash'),
+                marker=dict(size=8, symbol='square', color="#ff7f0e"),
+                hovertemplate='<b>%{x}</b><br>Production: %{y:,.0f} unités<extra></extra>'
+            ))
 
+            fig.update_layout(
+                title=dict(text="Ventes vs Productions", x=0.5, font=dict(size=16)),
+                xaxis_title="Mois",
+                yaxis_title="Valeur / Volume",
+                hovermode="x unified",
+                legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
+                template="plotly_white",
+                height=450,
+                margin=dict(l=50, r=50, t=80, b=50),
+                xaxis=dict(tickangle=45)
+            )
+
+            st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
+        else:
+            st.info("Données de production insuffisantes pour comparaison.")
+    
     # ---------- TOP CLIENTS ----------
     st.markdown("## Concentration du chiffre d’affaires par client")
     st.caption("Identification des clients stratégiques")
 
-    from db import get_data
     df_personne = get_data("SELECT ID_PERSONNE, NOM FROM personne")
 
     facture_client = facture.merge(
@@ -347,20 +416,30 @@ if "QUANTITE_PRODUITE" in stock.columns:
         .head(top_n)
     )
 
-    fig, ax = plt.subplots(figsize=(9, 4))
-    sns.barplot(
+    fig = go.Figure(go.Bar(
         x=top_clients.values,
         y=top_clients.index,
-        palette="Blues_r",
-        ax=ax
+        orientation='h',
+        marker=dict(
+            color=top_clients.values,
+            colorscale='Blues',
+            showscale=True,
+            colorbar=dict(title="CA (FCFA)")
+            ),
+        hovertemplate='<b>%{y}</b><br>CA: %{x:,.0f} FCFA<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title=dict(text=f"Top {top_n} clients par chiffre d’affaires", x=0.5, font=dict(size=16)),
+        xaxis_title="Chiffre d’affaires (FCFA)",
+        yaxis_title="Client",
+        template="plotly_white",
+        height=400,
+        margin=dict(l=100, r=20, t=50, b=20),
+        xaxis=dict(tickformat=",.0f", tickprefix='', ticksuffix=' FCFA')
     )
 
-    ax.set_title("Top 5 clients par chiffre d’affaires", fontsize=14, weight="bold")
-    ax.set_xlabel("Chiffre d’affaires (FCFA)")
-    ax.set_ylabel("Client")
-    ax.grid(axis="x", linestyle="--", alpha=0.6)
-
-    st.pyplot(fig)
+    st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
     total_ca = facture_client["MONTANT_NET"].sum()
     part_top = (top_clients.sum() / total_ca * 100) if total_ca > 0 else 0
@@ -379,7 +458,6 @@ if "QUANTITE_PRODUITE" in stock.columns:
         )
 
 elif analyse_type == "Encaissements":
-
     st.markdown("## CA vs Encaissements")
 
     facture["MOIS_NUM"] = facture["DATE_CREATION"].dt.month
@@ -396,55 +474,131 @@ elif analyse_type == "Encaissements":
         "Encaissements": enc_mensuel
     }).fillna(0)
 
-    fig, ax = plt.subplots(figsize=(9, 4))
-    sns.lineplot(x=df_compare.index, y=df_compare["CA"], label="CA", ax=ax)
-    sns.lineplot(x=df_compare.index, y=df_compare["Encaissements"], label="Encaissements", ax=ax)
+    fig = go.Figure()
 
-    ax.set_title("CA vs Encaissements")
-    ax.grid(axis="y", linestyle="--", alpha=0.6)
-    plt.xticks(rotation=45)
-    st.pyplot(fig)
+    fig.add_trace(go.Scatter(
+        x=df_compare.index.tolist(),
+        y=df_compare["CA"].tolist(),
+        mode='lines+markers',
+        name='CA',
+        line=dict(color=COLORS['primary'],width=3),
+        marker=dict(size=8, symbol='circle', color="#1f77b4"),
+        hovertemplate='<b>%{x}</b><br>CA: %{y:,.0f} FCFA<extra></extra>'
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=df_compare.index.tolist(),
+        y=df_compare["Encaissements"].tolist(),
+        mode='lines+markers',
+        name='Encaissements',
+        line=dict(color=COLORS['success'], width=3, dash='dash'),
+        marker=dict(size=8, symbol='square', color="#ff7f0e"),
+        hovertemplate='<b>%{x}</b><br>Encaissements: %{y:,.0f} FCFA<extra></extra>'
+    ))
+
+    fig.update_layout(
+        title=dict(text="CA vs Encaissements", x=0.5, font=dict(size=16)),
+        xaxis_title="Mois",
+        yaxis_title="Montant (FCFA)",
+        hovermode="x unified",
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5),
+        template="plotly_white",
+        height=400,
+        margin=dict(l=50, r=50, t=80, b=50),
+        xaxis=dict(tickangle=45),
+        yaxis=dict(tickformat=",.0f", tickprefix='', ticksuffix=' FCFA')
+    )
+
+    st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
 elif analyse_type == "Stock":
-        st.subheader("Stock")
-        st.bar_chart(stock.groupby("ID_MAGASIN")["QUANTITE"].sum())
+    st.subheader("Stock par produit")
+
+    if "ID_PRODUIT" in stock.columns or "ID_ARTICLE" in stock.columns:
+        id_col = "ID_PRODUIT" if "ID_PRODUIT" in stock.columns else "ID_ARTICLE"
+        
+        df_stock_produit = stock.merge(
+            df_produit,
+            left_on=id_col,
+            right_on="ID_PRODUIT",
+            how="left"
+        )
+        df_stock_produit["DESIGNATION"] = df_stock_produit["DESIGNATION"].fillna("Produit inconnu")
+
+        stock_par_produit = (
+            df_stock_produit
+            .groupby("DESIGNATION")["QUANTITE"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(top_n)
+        )
+    
+        fig = go.Figure(go.Bar(
+            x=stock_par_produit.values,
+            y=stock_par_produit.index,
+            orientation='h',
+            marker_color=COLORS['primary'],
+            hovertemplate='<b>%{y}</b><br>Stock: %{x:,.0f} unités<extra></extra>'
+        ))
+
+        fig.update_layout(
+            title=dict(text=f"Top {top_n} produits en stock", x=0.5, font=dict(size=16)),
+            xaxis_title="Quantité en stock",
+            yaxis_title="Produit",
+            height=400,
+            margin=dict(l=120, r=20, t=50, b=20)
+        )
+        st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
+    else:
+        st.warning("Données de stock non disponibles pour la période sélectionnée.")
 
 elif analyse_type == "Production":
     st.subheader("Production")
+    st.info("Module Production en cours de développement.")
 
 elif analyse_type == "Pertes":
-    st.subheader("Pertes")
-
+    st.subheader("Pertes - Top articles par volume de pertes")
     
-    pertes_article = (
-        df_prod_f
-        .groupby("DESIGNATION")["PERTES_TOTALES"]
-        .sum()
-        .sort_values(ascending=False)
-        .head(top_n)
-    )
+    if not df_prod_f.empty and "PERTES_TOTALES" in df_prod_f.columns:
+        pertes_article = (
+            df_prod_f
+            .groupby("DESIGNATION")["PERTES_TOTALES"]
+            .sum()
+            .sort_values(ascending=False)
+            .head(top_n)
+        )
+        
+        if not pertes_article.empty:
+            fig = go.Figure(go.Bar(
+                x=pertes_article.values,
+                y=pertes_article.index,
+                orientation='h',
+                marker=dict(
+                    color=pertes_article.values,
+                    colorscale='Oranges',
+                    showscale=True,
+                    colorbar=dict(title="Volume de pertes")
+                ),
+                hovertemplate='<b>%{y}</b><br>Volume de pertes: %{x:,.0f} unités<extra></extra>'
+            ))
 
-    fig, ax = plt.subplots(figsize=(9, 4))
-    sns.barplot(
-        x=pertes_article.values,
-        y=pertes_article.index,
-        palette="Oranges_r",
-        ax=ax
-    )
-    ax.set_xlabel("Volume de pertes")
-    ax.set_ylabel("Article")
-    ax.grid(axis="x", linestyle="--", alpha=0.6)
-    st.pyplot(fig)
+            fig.update_layout(
+                title=dict(text=f"Top {top_n} articles par volume de pertes", x=0.5, font=dict(size=16)),
+                xaxis_title="Volume de pertes",
+                yaxis_title="Article",
+                height=400,
+                margin=dict(l=120, r=20, t=50, b=20)
+            )
+
+            st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
+        else:
+            st.info("Aucune perte enregistrée sur la période sélectionnée.")
+    else:
+        st.warning("Données de pertes non disponibles pour la période sélectionnée.")
 
 # ===============================
 # INTERPRÉTATION AUTOMATIQUE
 # ===============================
-    st.subheader("Lecture automatique")
-    
-else:
-    st.info("Veuillez sélectionner un type d’analyse.")
-
-
 if ca > 0:
     msg = (
         f"Pour l’année {annee_dash}, sur la période sélectionnée, "
@@ -467,13 +621,10 @@ st.success("Dashboard mis à jour dynamiquement en fonction des filtres sélecti
 
 if analyse_type in ["Production", "Pertes", "Stock"]:
     data_for_report = df_prod_f.copy()
-
 elif analyse_type == "Ventes":
     data_for_report = facture.copy()
-
 elif analyse_type == "Encaissements":
     data_for_report = paiement.copy()
-
 else:
     data_for_report = None
 
