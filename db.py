@@ -34,110 +34,71 @@
 #     except Exception as e:
 #         st.error(f"❌ Erreur SQL : {str(e)}")
 #         return pd.DataFrame()
-
-# db.py
+# db.py - Version hybride (MySQL en local, SQLite sur le cloud)
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine, text
-import urllib.parse
+import sqlite3
+import os
 
-def get_db_config():
-    """
-    Récupère la configuration de la base de données.
-    Priorité : secrets Streamlit (déploiement) > configuration locale
-    """
-    # Si on est sur Streamlit Cloud (les secrets existent)
-    try:
-        if "database" in st.secrets:
-            # Nouvelle structure : secrets.toml avec section [database]
-            config = {
-                'host': st.secrets["database"]["host"],
-                'user': st.secrets["database"]["user"],
-                'password': st.secrets["database"]["password"],
-                'database': st.secrets["database"]["database"],
-                'port': int(st.secrets["database"].get("port", 3306))
-            }
-            return config
-        elif "DB_HOST" in st.secrets:
-            # Structure alternative : variables individuelles
-            config = {
-                'host': st.secrets["DB_HOST"],
-                'user': st.secrets["DB_USER"],
-                'password': st.secrets["DB_PASSWORD"],
-                'database': st.secrets["DB_NAME"],
-                'port': int(st.secrets.get("DB_PORT", 3306))
-            }
-            return config
-        else:
-            # Fallback : configuration locale
-            return {
-                'host': 'localhost',
-                'user': 'root',
-                'password': '',
-                'database': 'Sellams_namm',
-                'port': 3306
-            }
-    except:
-        # Configuration locale par défaut
-        return {
-            'host': 'localhost',
-            'user': 'root',
-            'password': '',
-            'database': 'Sellams_namm',
-            'port': 3306
-        }
+# Détection de l'environnement
+IS_CLOUD = os.environ.get('STREAMLIT_CLOUD', False) or 'STREAMLIT_SHARING' in os.environ
 
-@st.cache_resource
-def get_db_engine():
+@st.cache_data(ttl=3600)
+def get_data(query: str) -> pd.DataFrame:
+    """Exécute une requête SQL - Adapté selon l'environnement"""
+    
+    if IS_CLOUD:
+        # Mode Cloud : SQLite
+        return get_data_sqlite(query)
+    else:
+        # Mode Local : MySQL
+        return get_data_mysql(query)
+
+def get_data_sqlite(query: str) -> pd.DataFrame:
+    """Version SQLite pour le cloud"""
     try:
-        config = get_db_config()
+        db_path = "Sellams_namm.db"
         
-        # Encoder le mot de passe pour éviter les caractères spéciaux
-        password_encoded = urllib.parse.quote_plus(config['password'])
+        if not os.path.exists(db_path):
+            st.error(f"❌ Fichier '{db_path}' introuvable")
+            return pd.DataFrame()
         
-        # Construction de la chaîne de connexion
-        if config['password']:
-            connection_string = f"mysql+pymysql://{config['user']}:{password_encoded}@{config['host']}:{config['port']}/{config['database']}"
-        else:
-            connection_string = f"mysql+pymysql://{config['user']}@{config['host']}:{config['port']}/{config['database']}"
+        conn = sqlite3.connect(db_path)
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        return df
+    except Exception as e:
+        st.error(f"❌ Erreur SQLite : {str(e)}")
+        return pd.DataFrame()
+
+def get_data_mysql(query: str) -> pd.DataFrame:
+    """Version MySQL pour le développement local"""
+    from sqlalchemy import create_engine, text
+    
+    try:
+        connection_string = f"mysql+pymysql://root@localhost:3306/Sellams_namm"
+        engine = create_engine(connection_string, pool_pre_ping=True)
         
-        engine = create_engine(
-            connection_string, 
-            pool_pre_ping=True,
-            pool_recycle=3600  # Recycle les connexions après 1 heure
-        )
-        
-        # Tester la connexion
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         
-        return engine
-    except Exception as e:
-        st.error(f"❌ Erreur de connexion MySQL : {str(e)}")
-        return None
-
-@st.cache_data(ttl=3600)  # Cache les résultats pendant 1 heure
-def get_data(query: str) -> pd.DataFrame:
-    """
-    Exécute une requête SQL et retourne un DataFrame.
-    Le résultat est mis en cache pour optimiser les performances.
-    """
-    engine = get_db_engine()
-    if engine is None:
-        return pd.DataFrame()
-    try:
         df = pd.read_sql_query(query, engine)
+        engine.dispose()
         return df
     except Exception as e:
-        st.error(f"❌ Erreur SQL : {str(e)}")
+        st.error(f"❌ Erreur MySQL : {str(e)}")
         return pd.DataFrame()
 
 def test_connection():
-    """Fonction utilitaire pour tester la connexion"""
-    engine = get_db_engine()
-    if engine:
-        st.success("✅ Connexion à la base de données réussie !")
-        return True
+    """Test la connexion selon l'environnement"""
+    if IS_CLOUD:
+        return os.path.exists("Sellams_namm.db")
     else:
-        st.error("❌ Échec de la connexion à la base de données")
-        return False
+        try:
+            from sqlalchemy import create_engine, text
+            engine = create_engine("mysql+pymysql://root@localhost:3306/Sellams_namm")
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return True
+        except:
+            return False

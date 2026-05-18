@@ -263,18 +263,18 @@ perimetre = st.sidebar.multiselect(
 # APPLICATION FILTRES
 # ===============================
 if mois_selectionnes:
-    facture_f = facture[
+    facture_client = facture[
         (facture["DATE_CREATION"].dt.year == annee) &
         (facture["DATE_CREATION"].dt.month.isin(mois_selectionnes)) &
         (facture["VALIDER"] == 1)
     ].copy()
 else:
-    facture_f = pd.DataFrame()
+    facture_client = pd.DataFrame()
 
 if not paiement.empty and 'DATE_PAIEMENT' in paiement.columns:
-    paiement_f = paiement[paiement["DATE_PAIEMENT"].dt.year == annee].copy()
+    paiement_facture = paiement[paiement["DATE_PAIEMENT"].dt.year == annee].copy()
 else:
-    paiement_f = pd.DataFrame()
+    paiement_facture = pd.DataFrame()
 
 metier = st.selectbox(
     "Type d’analyse métier",
@@ -290,8 +290,8 @@ st.session_state.update({
     "annee": annee,
     "mois": mois_selectionnes,
     "perimetre": perimetre,
-    "facture_f": facture_f,
-    "paiement_f": paiement_f,
+    "facture_client": facture_client,
+    "paiement_facture": paiement_facture,
     "stock": stock,
     "df_prod": df_prod,
     "df_personne": df_personne,
@@ -310,9 +310,9 @@ st.divider()
 # ===============================
 # KPI EXÉCUTIFS
 # ===============================
-ca_total = facture_f["MONTANT_NET"].sum() if not facture_f.empty else 0
-nb_factures = facture_f["ID_FACTURE_CLIENT"].nunique() if not facture_f.empty else 0
-encaisse = paiement_f["MONTANT"].sum() if not paiement_f.empty else 0
+ca_total = facture_client["MONTANT_NET"].sum() if not facture_client.empty else 0
+nb_factures = facture_client["ID_FACTURE_CLIENT"].nunique() if not facture_client.empty else 0
+encaisse = paiement_facture["MONTANT"].sum() if not paiement_facture.empty else 0
 taux_enc = (encaisse / ca_total * 100) if ca_total > 0 else 0
 stock_total = stock["QUANTITE"].sum() if not stock.empty and 'QUANTITE' in stock.columns else 0
 
@@ -348,11 +348,11 @@ st.divider()
 # ===============================
 st.subheader("Tendances globales")
 
-if not facture_f.empty:
-    facture_f["MOIS_NUM"] = facture_f["DATE_CREATION"].dt.month
-    facture_f["MOIS_NOM"] = facture_f["MOIS_NUM"].map(MOIS_FR)
+if not facture_client.empty:
+    facture_client["MOIS_NUM"] = facture_client["DATE_CREATION"].dt.month
+    facture_client["MOIS_NOM"] = facture_client["MOIS_NUM"].map(MOIS_FR)
     
-    ca_mensuel = facture_f.groupby("MOIS_NOM", sort=False)["MONTANT_NET"].sum().reset_index()
+    ca_mensuel = facture_client.groupby("MOIS_NOM", sort=False)["MONTANT_NET"].sum().reset_index()
     
     if not ca_mensuel.empty:
 
@@ -467,4 +467,4 @@ with st.expander(" Informations techniques"):
     st.write(f"- Produits : {len(df_produit)} références")
     st.write(f"- Conditionnement : {len(df_conditionnement)} enregistrements")
     st.write(f"- Clients : {len(df_personne)} personnes")
-    st.write(f"- Période filtrée : {len(facture_f)} factures")
+    st.write(f"- Période filtrée : {len(facture_client)} factures")

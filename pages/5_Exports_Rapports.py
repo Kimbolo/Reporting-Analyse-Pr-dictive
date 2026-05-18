@@ -26,7 +26,7 @@ st.caption("Génération automatique de rapports PDF")
 # ==================================================
 # SÉCURITÉ SESSION
 # ==================================================
-required = ["facture_f", "paiement_f", "annee"]
+required = ["facture_f", "paiement_facture", "annee"]
 missing = [k for k in required if k not in st.session_state]
 
 if missing:
@@ -34,7 +34,7 @@ if missing:
     st.stop()
 
 facture = st.session_state["facture_f"].copy()
-paiement = st.session_state["paiement_f"].copy()
+paiement = st.session_state["paiement_facture"].copy()
 annee = st.session_state["annee"]
 
 # ==================================================

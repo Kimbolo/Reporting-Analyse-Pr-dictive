@@ -54,13 +54,13 @@ st.caption("Previsions, detection d'anomalies et insights strategiques")
 # ==========================================================
 # SECURITE DES DONNEES PARTAGEES
 # ==========================================================
-required_keys = ["facture_f", "stock", "df_prod", "annee", "mois"]
+required_keys = ["facture_client", "stock", "df_prod", "annee", "mois"]
 if not all(k in st.session_state for k in required_keys):
     st.warning("Veuillez d'abord charger les donnees dans l'onglet App.")
     st.stop()
 
 # Récupérer les données filtrées de l'onglet principal
-facture_filtered = st.session_state["facture_f"].copy()
+facture_clientiltered = st.session_state["facture_client"].copy()
 stock = st.session_state["stock"].copy()
 df_prod = st.session_state.get("df_prod", pd.DataFrame())
 annee_courante = st.session_state.get("annee", 2024)
@@ -71,11 +71,11 @@ if "facture_all" in st.session_state:
     facture_all = st.session_state["facture_all"].copy()
 else:
     # Fallback: utiliser les données filtrées si indisponibles
-    facture_all = facture_filtered
+    facture_all = facture_clientiltered
     st.warning("Données complètes non disponibles - Utilisation des données filtrées uniquement")
 
 # Pour l'affichage, on garde le filtre actuel
-facture = facture_filtered
+facture = facture_clientiltered
 
 # Conversion des dates pour facture_all également
 facture_all["DATE_CREATION"] = pd.to_datetime(facture_all["DATE_CREATION"], errors="coerce")

@@ -125,13 +125,13 @@ st.title("Dashboard interactif")
 # ===============================
 # SÉCURITÉ SESSION
 # ===============================
-required = ["facture_f", "paiement_f", "stock"]
+required = ["facture_client", "paiement_facture", "stock"]
 if not all(k in st.session_state for k in required):
     st.warning("Veuillez d’abord configurer les filtres dans l’onglet App.")
     st.stop()
 
-facture_all = st.session_state["facture_f"].copy()
-paiement_all = st.session_state["paiement_f"].copy()
+facture_all = st.session_state["facture_client"].copy()
+paiement_all = st.session_state["paiement_facture"].copy()
 stock = st.session_state["stock"].copy()
 
 # ===============================

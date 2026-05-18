@@ -12,7 +12,7 @@ mysql_engine = create_engine('mysql+pymysql://root@localhost:3306/Sellams_namm')
 sqlite_conn = sqlite3.connect('Sellams_namm.db')
 
 # Liste des tables à exporter (ajustez selon vos tables)
-tables = ['facture_f', 'paiement_f', 'stock', 'personne', 'magasin', 'produit']
+tables = ['facture_client', 'paiement_facture', 'stock', 'personne', 'magasin', 'produit']
 
 for table in tables:
     try:

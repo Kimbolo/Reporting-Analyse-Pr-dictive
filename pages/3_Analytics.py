@@ -14,13 +14,13 @@ sns.set_style("whitegrid")
 st.title("Analytics — Audit de performance")
 st.caption("Analyse expliquée et diagnostique des performances commerciales")
 
-required = ["facture_f", "paiement_f", "stock", "annee"]
+required = ["facture_client", "paiement_facture", "stock", "annee"]
 if not all(k in st.session_state for k in required):
     st.warning("Veuillez d’abord configurer les filtres dans l’onglet App.")
     st.stop()
 
-facture = st.session_state["facture_f"].copy()
-paiement = st.session_state["paiement_f"].copy()
+facture = st.session_state["facture_client"].copy()
+paiement = st.session_state["paiement_facture"].copy()
 stock = st.session_state["stock"].copy()
 annee = st.session_state["annee"]
 
