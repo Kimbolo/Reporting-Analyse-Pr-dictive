@@ -113,7 +113,7 @@ def load_all_data():
         FROM personne
     """)
 
-    # Conversion des dates
+  # Conversion des dates
     if not facture.empty :
         facture["DATE_CREATION"] = pd.to_datetime(facture["DATE_CREATION"], errors="coerce")
     if not paiement.empty:
@@ -123,8 +123,8 @@ def load_all_data():
     if not df_conditionnement.empty:
         df_conditionnement["DATE_PRODUCTION"] = pd.to_datetime(df_conditionnement["DATE_PRODUCTION"], errors="coerce")
 
-        return facture, paiement, stock, df_produit, df_conditionnement, df_personne
-
+    # ← LE RETURN DOIT ÊTRE ICI, EN DEHORS DE TOUT IF
+    return facture, paiement, stock, df_produit, df_conditionnement, df_personne
 # Chargement unique des données
 with st.spinner("Chargement des données..."):
     facture_all, paiement_all, stock_all, df_produit, df_conditionnement, df_personne = load_all_data()
@@ -133,7 +133,7 @@ with st.spinner("Chargement des données..."):
     st.session_state["paiement_all"] = paiement_all.copy()
     st.session_state["stock_all"] = stock_all.copy()
 
-# Correction : Renommer les variables pour cohérence
+# Correction : Renommer les variables pour cohérenceif not facture.empty :
 facture = facture_all
 paiement = paiement_all
 stock = stock_all
