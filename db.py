@@ -1,4 +1,4 @@
-# db.py - Version SQLite finale
+# db.py - Version SQLite pour Streamlit Cloud
 import streamlit as st
 import pandas as pd
 import sqlite3
@@ -11,8 +11,7 @@ def get_data(query: str) -> pd.DataFrame:
         db_path = "Sellams_namm.db"
         
         if not os.path.exists(db_path):
-            st.error(f"❌ Base de données introuvable : {db_path}")
-            st.info("Le fichier doit être présent dans le dépôt GitHub")
+            st.error(f"❌ Base de données introuvable")
             return pd.DataFrame()
         
         conn = sqlite3.connect(db_path)
