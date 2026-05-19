@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from db import get_data
+from db import get_data, get_data_safe, table_exists
 from sqlalchemy import create_engine, text
 
 import plotly.express as px
@@ -90,20 +90,14 @@ def load_all_data():
     """)
     
     # Conditionnement production
-    df_conditionnement = get_data("""
-        SELECT
-            DATE_PRODUCTION,
-            ID_ARTICLE,
-            PERDE_EN_BOUTEILLE,
-            PERDE_EN_CAPSULE,
-            PERDE_EN_ETIQUETTE,
-            PERDE_EN_CARTON,
-            QUANTITE_AVARIE,
-            QUANTITE_ATTENDUE,
-            QUANTITE_REELLE,
-            QUANTITE_TOTALE
-        FROM conditionnement_production
-    """)
+    if table_exists("conditionnement_production"):
+        df_conditionnement = get_data_safe("SELECT * FROM conditionnement_production")
+
+        if not df_conditionnement.empty:
+            pass
+    else:
+        st.info("Table conditionnement_production non disponible")
+        df_conditionnement = pd.DataFrame()
     
     # Clients (personnes)
     df_personne = get_data("""
@@ -113,18 +107,20 @@ def load_all_data():
         FROM personne
     """)
 
-  # Conversion des dates
-    if not facture.empty :
+    # Conversion des dates
+    if not facture.empty:
         facture["DATE_CREATION"] = pd.to_datetime(facture["DATE_CREATION"], errors="coerce")
     if not paiement.empty:
         paiement["DATE_PAIEMENT"] = pd.to_datetime(paiement["DATE_PAIEMENT"], errors="coerce")
     if not stock.empty:
         stock["DATE_PRODUCTION"] = pd.to_datetime(stock["DATE_PRODUCTION"], errors="coerce")
-    if not df_conditionnement.empty:
-        df_conditionnement["DATE_PRODUCTION"] = pd.to_datetime(df_conditionnement["DATE_PRODUCTION"], errors="coerce")
+    
+    # Pour conditionnement - utiliser le bon nom de colonne
+    if not df_conditionnement.empty and 'date_production' in df_conditionnement.columns:
+        df_conditionnement["date_production"] = pd.to_datetime(df_conditionnement["date_production"], errors="coerce")
 
-    # ← LE RETURN DOIT ÊTRE ICI, EN DEHORS DE TOUT IF
     return facture, paiement, stock, df_produit, df_conditionnement, df_personne
+
 # Chargement unique des données
 with st.spinner("Chargement des données..."):
     facture_all, paiement_all, stock_all, df_produit, df_conditionnement, df_personne = load_all_data()
@@ -161,39 +157,48 @@ if facture_all.empty:
 # ===============================
 
 if not df_conditionnement.empty and not df_produit.empty:
-    df_prod = df_conditionnement.merge(
-    df_produit,
-    left_on="ID_ARTICLE",
-    right_on="ID_PRODUIT",
-    how="left"
-)
+    try:
+        df_prod = df_conditionnement.merge(
+            df_produit,
+            left_on="ID_ARTICLE",
+            right_on="ID_PRODUIT",
+            how="left"
+        )
 
-    df_prod["DESIGNATION"] = df_prod["DESIGNATION"].fillna("Article inconnu")
+        df_prod["DESIGNATION"] = df_prod["DESIGNATION"].fillna("Article inconnu")
 
-# ===============================
-# NORMALISATION DATE
-# ===============================
-    df_prod["DATE_PRODUCTION"] = pd.to_datetime(
-        df_prod["DATE_PRODUCTION"],
-        errors="coerce"
-    )
+        # NORMALISATION DATE
+        if 'DATE_PRODUCTION' in df_prod.columns:
+            df_prod["DATE_PRODUCTION"] = pd.to_datetime(
+                df_prod["DATE_PRODUCTION"],
+                errors="coerce"
+            )
 
-# ===============================
-# MÉTRIQUES MÉTIER
-# ===============================
-    df_prod["PERTES_TOTALES"] = (
-        df_prod["PERDE_EN_BOUTEILLE"].fillna(0) +
-        df_prod["PERDE_EN_CAPSULE"].fillna(0) +
-        df_prod["PERDE_EN_ETIQUETTE"].fillna(0) +
-        df_prod["PERDE_EN_CARTON"].fillna(0) +
-        df_prod["QUANTITE_AVARIE"].fillna(0)
-    )
+        # MÉTRIQUES MÉTIER - Vérifier que les colonnes existent
+        colonnes_pertes = ["PERDE_EN_BOUTEILLE", "PERDE_EN_CAPSULE", 
+                          "PERDE_EN_ETIQUETTE", "PERDE_EN_CARTON", "QUANTITE_AVARIE"]
+        
+        colonnes_presentes = [col for col in colonnes_pertes if col in df_prod.columns]
+        
+        if colonnes_presentes:
+            df_prod["PERTES_TOTALES"] = df_prod[colonnes_presentes].fillna(0).sum(axis=1)
+        else:
+            df_prod["PERTES_TOTALES"] = 0
 
-    df_prod["ECART_STOCK"] = (
-        df_prod["QUANTITE_REELLE"].fillna(0) -
-        df_prod["QUANTITE_ATTENDUE"].fillna(0)
-    )
-else :
+        if "QUANTITE_REELLE" in df_prod.columns and "QUANTITE_ATTENDUE" in df_prod.columns:
+            df_prod["ECART_STOCK"] = (
+                df_prod["QUANTITE_REELLE"].fillna(0) -
+                df_prod["QUANTITE_ATTENDUE"].fillna(0)
+            )
+        else:
+            df_prod["ECART_STOCK"] = 0
+            
+    except Exception as e:
+        st.warning(f"Erreur lors du traitement des données de conditionnement: {e}")
+        df_prod = pd.DataFrame()
+else:
+    if df_conditionnement.empty:
+        st.info("Données de conditionnement non disponibles pour cette base")
     df_prod = pd.DataFrame()
 
 # ===============================
