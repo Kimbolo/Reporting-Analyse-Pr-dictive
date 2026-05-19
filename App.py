@@ -158,25 +158,28 @@ if facture_all.empty:
 
 if not df_conditionnement.empty and not df_produit.empty:
     try:
+        # Afficher les colonnes pour debug (optionnel)
+        # st.write("Colonnes conditionnement:", df_conditionnement.columns.tolist())
+        
         df_prod = df_conditionnement.merge(
             df_produit,
-            left_on="ID_ARTICLE",
+            left_on="id_article",           # Changé: minuscules
             right_on="ID_PRODUIT",
             how="left"
         )
 
         df_prod["DESIGNATION"] = df_prod["DESIGNATION"].fillna("Article inconnu")
 
-        # NORMALISATION DATE
-        if 'DATE_PRODUCTION' in df_prod.columns:
-            df_prod["DATE_PRODUCTION"] = pd.to_datetime(
-                df_prod["DATE_PRODUCTION"],
+        # NORMALISATION DATE - utiliser le bon nom
+        if 'date_production' in df_prod.columns:
+            df_prod["date_production"] = pd.to_datetime(
+                df_prod["date_production"],
                 errors="coerce"
             )
 
-        # MÉTRIQUES MÉTIER - Vérifier que les colonnes existent
-        colonnes_pertes = ["PERDE_EN_BOUTEILLE", "PERDE_EN_CAPSULE", 
-                          "PERDE_EN_ETIQUETTE", "PERDE_EN_CARTON", "QUANTITE_AVARIE"]
+        # MÉTRIQUES MÉTIER - utiliser les noms en minuscules
+        colonnes_pertes = ["perde_en_bouteille", "perde_en_capsule", 
+                          "perde_en_etiquette", "perde_en_carton", "quantite_avarie"]
         
         colonnes_presentes = [col for col in colonnes_pertes if col in df_prod.columns]
         
@@ -185,10 +188,10 @@ if not df_conditionnement.empty and not df_produit.empty:
         else:
             df_prod["PERTES_TOTALES"] = 0
 
-        if "QUANTITE_REELLE" in df_prod.columns and "QUANTITE_ATTENDUE" in df_prod.columns:
+        if "quantite_reelle" in df_prod.columns and "quantite_attendue" in df_prod.columns:
             df_prod["ECART_STOCK"] = (
-                df_prod["QUANTITE_REELLE"].fillna(0) -
-                df_prod["QUANTITE_ATTENDUE"].fillna(0)
+                df_prod["quantite_reelle"].fillna(0) -
+                df_prod["quantite_attendue"].fillna(0)
             )
         else:
             df_prod["ECART_STOCK"] = 0
