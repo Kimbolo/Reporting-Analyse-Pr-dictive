@@ -32,7 +32,7 @@ if df.empty:
     st.stop()
 
 # Afficher les colonnes disponibles pour débogage (optionnel)
-with st.expander("🔧 Informations techniques"):
+with st.expander("Informations techniques"):
     st.write("Colonnes disponibles:", df.columns.tolist())
 
 # ==================================================
