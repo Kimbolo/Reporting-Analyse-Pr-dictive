@@ -9,15 +9,12 @@ from db import get_data, table_exists
 
 sns.set_style("whitegrid")
 
-# ==================================================
 # TITRE & CONTEXTE
-# ==================================================
+
 st.title("Utilisateurs & Gouvernance")
 st.caption("Analyse de la structure humaine et des rôles du système")
 
-# ==================================================
 # CHARGEMENT DES DONNÉES
-# ==================================================
 
 # Vérifier si la table existe
 if not table_exists("utilisateur"):
@@ -31,13 +28,11 @@ if df.empty:
     st.warning("Aucune donnée trouvée dans la table utilisateur")
     st.stop()
 
-# Afficher les colonnes disponibles pour débogage (optionnel)
+# Afficher les colonnes disponibles pour débogage
 with st.expander("Informations techniques"):
     st.write("Colonnes disponibles:", df.columns.tolist())
 
-# ==================================================
 # DÉTECTION AUTOMATIQUE DES COLONNES
-# ==================================================
 
 # Essayer de trouver les colonnes par différents noms possibles
 id_col = None
@@ -93,10 +88,13 @@ else:
 
 # Nettoyage
 df_clean = df_clean.dropna(subset=["ID_UTILISATEUR"])
+df_clean["ID_UTILISATEUR"] = df_clean["ID_UTILISATEUR"].astype(str)
+df_clean["ID_PROFIL"] = df_clean["ID_PROFIL"].fillna(0).astype(int)
+if employe_col:
+    df_clean["EMPLOYE"] = df_clean["EMPLOYE"].fillna(0).astype(int)
 
-# ==================================================
 # MAPPING DES PROFILS
-# ==================================================
+
 profil_mapping = {
     1: "SUPER_ADMIN",
     2: "ADMINISTRATEUR",
@@ -115,9 +113,8 @@ profil_mapping = {
 df_clean["PROFIL_NOM"] = df_clean["ID_PROFIL"].map(profil_mapping)
 df_clean["PROFIL_NOM"] = df_clean["PROFIL_NOM"].fillna(f"Profil_{df_clean['ID_PROFIL']}")
 
-# ==================================================
 # KPI GLOBAUX
-# ==================================================
+
 st.markdown("## Indicateurs clés")
 
 nb_users = df_clean["ID_UTILISATEUR"].nunique()
@@ -129,9 +126,8 @@ col1.metric("Utilisateurs", nb_users)
 col2.metric("Profils distincts", nb_profils)
 col3.metric("Employés", f"{taux_employes:.1f} %" if employe_col else "N/A")
 
-# ==================================================
 # RÉPARTITION DES PROFILS
-# ==================================================
+
 st.markdown("## Répartition des profils utilisateurs")
 
 profil_counts = df_clean["PROFIL_NOM"].value_counts().reset_index()
@@ -165,9 +161,8 @@ if not profil_counts.empty:
 else:
     st.info("Aucune donnée de profil disponible")
 
-# ==================================================
 # EMPLOYÉS VS NON‑EMPLOYÉS
-# ==================================================
+
 if employe_col:
     st.markdown("## Employés vs non‑employés")
 
@@ -198,9 +193,8 @@ if employe_col:
         "des questions de sécurité ou de gouvernance."
     )
 
-# ==================================================
 # ANALYSE DE CONCENTRATION (RISQUE)
-# ==================================================
+
 if not profil_counts.empty:
     st.markdown("## Analyse de concentration des rôles")
 
@@ -224,9 +218,8 @@ if not profil_counts.empty:
             "Les profils utilisateurs sont relativement bien répartis."
         )
 
-# ==================================================
 # TABLEAU UTILISATEURS (EXPLORATION)
-# ==================================================
+
 st.markdown("## Détails des utilisateurs")
 
 # Filtres interactifs
@@ -267,9 +260,8 @@ st.dataframe(
     hide_index=True
 )
 
-# ==================================================
 # SYNTHÈSE ANALYTIQUE
-# ==================================================
+
 st.markdown("## Lecture automatique & recommandations")
 
 message = f"Le système compte **{nb_users} utilisateurs** répartis sur **{nb_profils} profils distincts**. "
