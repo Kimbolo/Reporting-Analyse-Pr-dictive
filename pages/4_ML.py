@@ -10,7 +10,7 @@ from plotly.subplots import make_subplots
 
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
-from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, mean_absolute_error, mean_absolute_percentage_error
 from db import get_data
 
@@ -37,7 +37,7 @@ COLORS = {
     'cyan': '#17becf'
 }
 
-# Configuration Plotly pour un rendu homogene
+# Configuration Plotly standardisée
 PLOTLY_CONFIG = {
     'displayModeBar': True,
     'modeBarButtonsToRemove': ['zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d'],
@@ -46,20 +46,100 @@ PLOTLY_CONFIG = {
 }
 
 # ==========================================================
+# FONCTIONS UTILITAIRES STANDARDISEES
+# ==========================================================
+
+def format_cfa(valeur):
+    """Formatage des montants en FCFA"""
+    if valeur is None or pd.isna(valeur):
+        return "0 FCFA"
+    return f"{valeur:,.0f}".replace(",", " ") + " FCFA"
+
+def format_percentage(valeur):
+    """Formatage des pourcentages"""
+    return f"{valeur:+.1f}%"
+
+def create_time_series_chart(data, x_values, y_values, title, y_label, 
+                              line_color=COLORS['primary'], line_dash='solid',
+                              show_fill=False, fill_color=None):
+    """Fonction générique pour créer des graphiques temporels Plotly"""
+    fig = go.Figure()
+    
+    fig.add_trace(go.Scatter(
+        x=x_values,
+        y=y_values,
+        mode='lines+markers',
+        name='Valeurs',
+        line=dict(color=line_color, width=3, dash=line_dash),
+        marker=dict(size=8, symbol='circle'),
+        fill='tozeroy' if show_fill else 'none',
+        fillcolor=fill_color
+    ))
+    
+    fig.update_layout(
+        title=dict(text=title, x=0.5, font=dict(size=16)),
+        xaxis_title="Période",
+        yaxis_title=y_label,
+        hovermode='x unified',
+        template='plotly_white',
+        height=450,
+        margin=dict(l=50, r=50, t=80, b=50)
+    )
+    
+    return fig
+
+def safe_get_moyennes_par_mois(ca_mensuel_all):
+    """Sécurise la récupération des moyennes mensuelles pour éviter l'erreur de variable non définie"""
+    if ca_mensuel_all is not None and not ca_mensuel_all.empty:
+        return ca_mensuel_all.groupby("MOIS")["MONTANT_NET"].mean()
+    return pd.Series()
+
+# ==========================================================
 # TITRE
 # ==========================================================
 st.title("Machine Learning")
 st.caption("Previsions, detection d'anomalies et insights strategiques")
 
 # ==========================================================
-# SECURITE DES DONNEES PARTAGEES
+# CHARGEMENT AUTONOME DES DONNEES
 # ==========================================================
-required_keys = ["facture_client", "stock", "df_prod", "annee", "mois"]
-if not all(k in st.session_state for k in required_keys):
-    st.warning("Veuillez d'abord charger les donnees dans l'onglet App.")
+
+# Tentative de chargement des données depuis la base
+try:
+    # Charger les factures
+    facture_all = get_data("SELECT * FROM facture_client")
+    if facture_all is not None and not facture_all.empty:
+        facture_all["DATE_CREATION"] = pd.to_datetime(facture_all["DATE_CREATION"], errors="coerce")
+        facture_all = facture_all.dropna(subset=["DATE_CREATION"])
+        facture = facture_all.copy()
+    else:
+        st.error("Impossible de charger les données des factures")
+        st.stop()
+    
+    # Charger les stocks
+    stock = get_data("SELECT * FROM stock")
+    if stock is None:
+        stock = pd.DataFrame()
+    
+    # Charger les données de production
+    df_prod = get_data("SELECT * FROM production")
+    if df_prod is None:
+        df_prod = pd.DataFrame()
+    
+    # Stocker dans session_state pour persistance
+    st.session_state["facture_client"] = facture
+    st.session_state["facture_all"] = facture_all
+    st.session_state["stock"] = stock
+    st.session_state["df_prod"] = df_prod
+    st.session_state["annee"] = datetime.now().year
+    st.session_state["mois"] = []
+    
+except Exception as e:
+    st.error(f"Erreur lors du chargement des données : {str(e)}")
+    st.info("Veuillez vérifier votre connexion à la base de données et que les tables existent")
     st.stop()
 
-# Récupérer les données filtrées de l'onglet principal
+# Récupérer les données
 facture_clientiltered = st.session_state["facture_client"].copy()
 stock = st.session_state["stock"].copy()
 df_prod = st.session_state.get("df_prod", pd.DataFrame())
@@ -70,16 +150,10 @@ mois_selectionnes = st.session_state.get("mois", [])
 if "facture_all" in st.session_state:
     facture_all = st.session_state["facture_all"].copy()
 else:
-    # Fallback: utiliser les données filtrées si indisponibles
     facture_all = facture_clientiltered
-    st.warning("Données complètes non disponibles - Utilisation des données filtrées uniquement")
 
 # Pour l'affichage, on garde le filtre actuel
 facture = facture_clientiltered
-
-# Conversion des dates pour facture_all également
-facture_all["DATE_CREATION"] = pd.to_datetime(facture_all["DATE_CREATION"], errors="coerce")
-facture_all = facture_all.dropna(subset=["DATE_CREATION"])
 
 # ==========================================================
 # CONSTANTES
@@ -96,14 +170,6 @@ MOIS_ABBR = {
     9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"
 }
 
-def format_cfa(valeur):
-    if valeur is None or pd.isna(valeur):
-        return "0 FCFA"
-    return f"{valeur:,.0f}".replace(",", " ") + " FCFA"
-
-def format_percentage(valeur):
-    return f"{valeur:+.1f}%"
-
 # ==========================================================
 # PREPARATION DES DONNEES POUR ANALYSES
 # ==========================================================
@@ -111,13 +177,9 @@ def format_percentage(valeur):
 # Creation d'une colonne mois pour les aggregations
 facture["MOIS"] = facture["DATE_CREATION"].dt.month
 facture["ANNEE"] = facture["DATE_CREATION"].dt.year
-facture["TRIMESTRE"] = facture["DATE_CREATION"].dt.quarter
-facture["JOUR_SEM"] = facture["DATE_CREATION"].dt.dayofweek
 
 facture_all["MOIS"] = facture_all["DATE_CREATION"].dt.month
 facture_all["ANNEE"] = facture_all["DATE_CREATION"].dt.year
-facture_all["TRIMESTRE"] = facture_all["DATE_CREATION"].dt.quarter
-facture_all["JOUR_SEM"] = facture_all["DATE_CREATION"].dt.dayofweek
 
 # CA mensuel par annee en utilisant TOUTES les factures (facture_all)
 ca_mensuel_all = (
@@ -150,8 +212,8 @@ st.markdown("## Analyse comparative YoY (Year over Year)")
 toutes_annees_disponibles = sorted(facture_all["DATE_CREATION"].dt.year.dropna().unique())
 
 if len(toutes_annees_disponibles) >= 2:
-    annee_reference = toutes_annees_disponibles[-1]  # Par défaut, on prend l'année la plus récente comme référence
-    annee_comparee = toutes_annees_disponibles[-2]  # Et l'année précédente pour la comparaison
+    annee_reference = toutes_annees_disponibles[-1]
+    annee_comparee = toutes_annees_disponibles[-2]
 
     with st.expander("Choisir les années à comparer"):
         col_adv1, col_adv2 = st.columns(2)
@@ -178,8 +240,6 @@ if len(toutes_annees_disponibles) >= 2:
         else:
             st.info(f"Mode standard : comparaison {annee_reference} vs {annee_comparee}")
 
-
-# Déterminer quelle année est la plus récente pour l'affichage
     if annee_reference > annee_comparee:
         annee_plus_recente = annee_reference
         annee_plus_ancienne = annee_comparee
@@ -190,16 +250,8 @@ if len(toutes_annees_disponibles) >= 2:
     annee_1 = annee_reference
     annee_2 = annee_comparee
 
-# ==========================================================
-# FILTRAGE DES DONNEES POUR LES 2 ANNEES
-# ==========================================================
-
-ca_annee_1 = ca_mensuel_all[ca_mensuel_all["ANNEE"] == annee_reference]
-ca_annee_2 = ca_mensuel_all[ca_mensuel_all["ANNEE"] == annee_comparee]
-
-# ==========================================================
-# AFFICHAGE COMPARAISON
-# ==========================================================
+    ca_annee_1 = ca_mensuel_all[ca_mensuel_all["ANNEE"] == annee_reference]
+    ca_annee_2 = ca_mensuel_all[ca_mensuel_all["ANNEE"] == annee_comparee]
 
 if not facture.empty and len(toutes_annees_disponibles) >= 2:
     
@@ -215,7 +267,7 @@ if not facture.empty and len(toutes_annees_disponibles) >= 2:
     nb_factures_2 = facture_annee_2["ID_FACTURE_CLIENT"].nunique()
     panier_2 = ca_2 / nb_factures_2 if nb_factures_2 > 0 else 0
     
-    # Calcul des évolutions (depuis l'année la plus ancienne vers la plus récente)
+    # Calcul des évolutions
     if annee_plus_recente == annee_1:
         evolution_ca = ((ca_1 - ca_2) / ca_2 * 100) if ca_2 > 0 else 0
         evolution_factures = ((nb_factures_1 - nb_factures_2) / nb_factures_2 * 100) if nb_factures_2 > 0 else 0
@@ -267,22 +319,18 @@ if not facture.empty and len(toutes_annees_disponibles) >= 2:
     # GRAPHIQUE COMPARATIF
     st.markdown("### Evolution mensuelle comparative")
     
-    # Préparer les valeurs pour les 12 mois
     mois_labels = [MOIS_ABBR.get(m, m) for m in range(1, 13)]
     
-    # Valeurs année 1
     valeurs_annee_1 = []
     for m in range(1, 13):
         val = ca_annee_1[ca_annee_1["MOIS"] == m]["MONTANT_NET"].values
         valeurs_annee_1.append(val[0] if len(val) > 0 else 0)
     
-    # Valeurs année 2
     valeurs_annee_2 = []
     for m in range(1, 13):
         val = ca_annee_2[ca_annee_2["MOIS"] == m]["MONTANT_NET"].values
         valeurs_annee_2.append(val[0] if len(val) > 0 else 0)
     
-    # Création du graphique
     fig = go.Figure()
     
     fig.add_trace(go.Scatter(
@@ -303,7 +351,6 @@ if not facture.empty and len(toutes_annees_disponibles) >= 2:
         marker=dict(size=8, symbol='square')
     ))
     
-    # Ajout des écarts significatifs
     for i, (val1, val2) in enumerate(zip(valeurs_annee_1, valeurs_annee_2)):
         if val1 > val2 and val2 > 0:
             fig.add_annotation(
@@ -334,9 +381,8 @@ if not facture.empty and len(toutes_annees_disponibles) >= 2:
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='center', x=0.5)
     )
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
     
-    # Interprétation
     st.markdown("Synthèse de la comparaison")
     
     col1, col2 = st.columns(2)
@@ -372,24 +418,44 @@ else:
 st.markdown("---")
 st.markdown("## Previsions pour les mois a venir")
 
+# Initialisation des variables pour éviter les erreurs
+previsions = None
+mae = None
+mois_futurs_labels = []
+
 if len(ca_mensuel_all) >= 6:
     
-    # Preparation des donnees pour la regression
     ca_mensuel_all = ca_mensuel_all.sort_values(["ANNEE", "MOIS"])
     ca_mensuel_all["ORDRE"] = range(len(ca_mensuel_all))
     
-    # Ajout des features cycliques
     ca_mensuel_all["MOIS_SIN"] = np.sin(2 * np.pi * ca_mensuel_all["MOIS"] / 12)
     ca_mensuel_all["MOIS_COS"] = np.cos(2 * np.pi * ca_mensuel_all["MOIS"] / 12)
     
-    X = ca_mensuel_all[["ORDRE", "MOIS_SIN", "MOIS_COS"]]
-    y = ca_mensuel_all["MONTANT_NET"]
+    # Séparation entraînement/test pour validation réaliste
+    train_size = min(len(ca_mensuel_all) - 3, int(len(ca_mensuel_all) * 0.8))
+    train_data = ca_mensuel_all.iloc[:train_size]
+    test_data = ca_mensuel_all.iloc[train_size:]
     
-    # Modele de regression
+    X_train = train_data[["ORDRE", "MOIS_SIN", "MOIS_COS"]]
+    y_train = train_data["MONTANT_NET"]
+    
     model = LinearRegression()
-    model.fit(X, y)
+    model.fit(X_train, y_train)
     
-    # Prevision pour les 6 prochains mois
+    # Validation sur données de test
+    if len(test_data) > 0:
+        X_test = test_data[["ORDRE", "MOIS_SIN", "MOIS_COS"]]
+        y_test = test_data["MONTANT_NET"]
+        y_pred_test = model.predict(X_test)
+        mae_test = mean_absolute_error(y_test, y_pred_test)
+        mape_test = mean_absolute_percentage_error(y_test, y_pred_test) * 100
+    else:
+        # Fallback si pas assez de données pour test
+        y_pred_train = model.predict(X_train)
+        mae_test = mean_absolute_error(y_train, y_pred_train)
+        mape_test = mean_absolute_percentage_error(y_train, y_pred_train) * 100
+    
+    # Prévision pour les 6 prochains mois
     derniere_position = ca_mensuel_all["ORDRE"].max()
     mois_futur = pd.DataFrame({
         "ORDRE": range(derniere_position + 1, derniere_position + 7),
@@ -398,7 +464,6 @@ if len(ca_mensuel_all) >= 6:
     })
     previsions = model.predict(mois_futur)
     
-    # Creation des labels pour les mois futurs
     dernier_mois = ca_mensuel_all.iloc[-1]["MOIS"]
     derniere_annee = ca_mensuel_all.iloc[-1]["ANNEE"]
     
@@ -411,21 +476,15 @@ if len(ca_mensuel_all) >= 6:
             annee_fut += 1
         mois_futurs_labels.append(f"{MOIS_ABBR.get(mois_fut, mois_fut)} {annee_fut}")
     
-    # Calcul de l'erreur historique du modèle (validation croisée simple)
-    from sklearn.model_selection import cross_val_score
-    from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
-
-    y_pred_train = model.predict(X)
-    mae = mean_absolute_error(y, y_pred_train)
-    mape = mean_absolute_percentage_error(y, y_pred_train) * 100
-
+    mae = mae_test
+    mape = mape_test
+    
     borne_inf = previsions - mae
     borne_sup = previsions + mae
-
-    # Affichage des métriques de qualité du modèle
+    
     col_precision1, col_precision2, col_precision3 = st.columns(3)
     with col_precision1:
-        st.metric("Précision du modèle", f"±{mae:,.0f} FCFA", help="Erreur absolue moyenne sur l'historique")
+        st.metric("Précision du modèle", f"±{mae:,.0f} FCFA", help="Erreur absolue moyenne sur données de test")
     with col_precision2:
         st.metric("MAPE", f"{mape:.1f}%", help="Mean Absolute Percentage Error - plus bas = meilleur")
     with col_precision3:
@@ -435,8 +494,7 @@ if len(ca_mensuel_all) >= 6:
             st.warning("Modèle acceptable")
         else:
             st.error("Modèle peu fiable")
-
-    # Affichage des previsions en metriques
+    
     st.markdown("### Previsions mensuelles avec intervalle de confiance")
     
     cols = st.columns(6)
@@ -448,17 +506,11 @@ if len(ca_mensuel_all) >= 6:
                 delta=f"±{mae:,.0f} FCFA",
                 delta_color="off"
             )
-            st.caption(f"Fourchette: {format_cfa(borne_inf[i])} - {format_cfa(borne_sup[i])} FCFA")
-
-            
-    # Graphique historique + previsions avec Plotly
-    st.markdown("### Evolution historique et previsionnelle")
+            st.caption(f"Fourchette: {format_cfa(borne_inf[i])} - {format_cfa(borne_sup[i])}")
     
-    # Preparer les donnees historiques (12 derniers mois)
     historique_labels = [f"{MOIS_ABBR.get(row['MOIS'], row['MOIS'])} {row['ANNEE']}" for _, row in ca_mensuel_all.tail(12).iterrows()]
     historique_vals = ca_mensuel_all.tail(12)["MONTANT_NET"].values
     
-    # Creation du graphique
     fig = go.Figure()
     
     fig.add_trace(go.Scatter(
@@ -481,8 +533,6 @@ if len(ca_mensuel_all) >= 6:
         hovertemplate='<b>Prevision</b><br>Periode: %{x}<br>CA estime: %{y:,.0f} FCFA<extra></extra>'
     ))
     
-    # Ajout d'une zone de confiance simple
-    std_dev = y.std()
     fig.add_trace(go.Scatter(
         x=mois_futurs_labels + mois_futurs_labels[::-1],
         y=list(borne_sup) + list(borne_inf[::-1]),
@@ -508,18 +558,17 @@ if len(ca_mensuel_all) >= 6:
     
     st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
     
-    # Interpretation
     moyenne_previsions = previsions.mean()
-    tendance = "HAUSSIERE" if moyenne_previsions > y.mean() else "BAISSIERE"
+    tendance = "HAUSSIERE" if moyenne_previsions > y_train.mean() else "BAISSIERE"
     
     st.markdown(f"""
-    <div style='background-color: {"#d4edda" if moyenne_previsions > y.mean() else "#fff3cd"}; 
+    <div style='background-color: {"#d4edda" if moyenne_previsions > y_train.mean() else "#fff3cd"}; 
                 padding: 15px; 
                 border-radius: 10px;
                 margin: 10px 0;'>
-        <b>Interpretation :</b> Tendance <b style='color: {"#28a745" if moyenne_previsions > y.mean() else "#ffc107"}'>
+        <b>Interpretation :</b> Tendance <b style='color: {"#28a745" if moyenne_previsions > y_train.mean() else "#ffc107"}'>
         {tendance}</b><br>
-        Prevision moyenne : {format_cfa(moyenne_previsions)} vs moyenne historique : {format_cfa(y.mean())}
+        Prevision moyenne : {format_cfa(moyenne_previsions)} vs moyenne historique : {format_cfa(y_train.mean())}
     </div>
     """, unsafe_allow_html=True)
     
@@ -537,7 +586,6 @@ if not top_produits.empty:
     col1, col2 = st.columns([3, 2])
     
     with col1:
-        # Graphique avec Plotly
         top_df = pd.DataFrame({
             'Produit': [f"Produit {i}" for i in top_produits.index],
             'CA': top_produits.values
@@ -594,27 +642,22 @@ if not top_produits.empty:
 if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
     st.markdown("## Analyse Production & Pertes")
     
-    # Donnees de production par mois
     if "DATE_PRODUCTION" in df_prod.columns:
         df_prod["DATE_PROD"] = pd.to_datetime(df_prod["DATE_PRODUCTION"], errors="coerce")
         df_prod["MOIS_PROD"] = df_prod["DATE_PROD"].dt.month
         df_prod["ANNEE_PROD"] = df_prod["DATE_PROD"].dt.year
         
-        # Production mensuelle
         prod_mensuelle = df_prod.groupby(["ANNEE_PROD", "MOIS_PROD"])["QUANTITE_TOTALE"].sum().reset_index()
         
-        # Verifier si PERTES_TOTALES existe
         if "PERTES_TOTALES" in df_prod.columns:
             pertes_mensuelle = df_prod.groupby(["ANNEE_PROD", "MOIS_PROD"])["PERTES_TOTALES"].sum().reset_index()
         else:
             pertes_mensuelle = pd.DataFrame()
         
-        # Graphique Production vs Pertes avec Plotly
         st.markdown("### Evolution production & pertes")
         
         fig = make_subplots(specs=[[{"secondary_y": True}]])
         
-        # Production
         prod_recent = prod_mensuelle.tail(12)
         labels = [f"{MOIS_ABBR.get(row['MOIS_PROD'], row['MOIS_PROD'])} {row['ANNEE_PROD']}" for _, row in prod_recent.iterrows()]
         
@@ -631,7 +674,6 @@ if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
             secondary_y=False
         )
         
-        # Pertes (si disponibles)
         if not pertes_mensuelle.empty:
             pertes_recent = pertes_mensuelle.tail(12)
             fig.add_trace(
@@ -661,7 +703,6 @@ if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
         
         st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
         
-        # Metriques de performance
         total_prod = df_prod["QUANTITE_TOTALE"].sum()
         
         col1, col2, col3 = st.columns(3)
@@ -683,12 +724,9 @@ if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
             else:
                 st.success("Performance : Taux de perte maitrise")
 
-
-    # Taux de perte détaillé avec objectif
     if "PERTES_TOTALES" in df_prod.columns and "QUANTITE_TOTALE" in df_prod.columns:
         st.markdown("### Analyse detaillée du taux de perte")
 
-        # Calculer le taux de perte par mois
         if "MOIS_PROD" in df_prod.columns and "ANNEE_PROD" in df_prod.columns:
             pertes_par_mois = df_prod.groupby(["ANNEE_PROD", "MOIS_PROD"]).agg({
                 "PERTES_TOTALES": "sum",
@@ -697,7 +735,6 @@ if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
 
             pertes_par_mois["TAUX_PERTE"] = (pertes_par_mois["PERTES_TOTALES"] / pertes_par_mois["QUANTITE_TOTALE"] * 100).fillna(0)
 
-            # Objectif paramétrable
             col_obj1, col_obj2 = st.columns(2)
             with col_obj1:
                 objectif_taux_perte = st.number_input(
@@ -719,7 +756,6 @@ if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
                     delta_color="inverse" if delta_taux > 0 else "normal"
                 )
 
-            # Graphique d'évolution du taux de perte
             fig_taux = go.Figure()
 
             labels_taux = [f"{MOIS_ABBR.get(row['MOIS_PROD'], row['MOIS_PROD'])} {row['ANNEE_PROD']}" for _, row in pertes_par_mois.tail(12).iterrows()]
@@ -737,7 +773,6 @@ if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
                 hovertemplate='<b>%{x}</b><br>Taux de perte: %{y:.1f}%<extra></extra>'
             ))
 
-            # Ligne d'objectif
             fig_taux.add_hline(
                 y=objectif_taux_perte,
                 line_dash="dash",
@@ -746,7 +781,6 @@ if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
                 annotation_position="top right"
             )
 
-            # Ligne d'alerte (objectif + 2%)
             seuil_alerte = objectif_taux_perte + 2
             fig_taux.add_hline(
                 y=seuil_alerte,
@@ -767,16 +801,14 @@ if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
 
             st.plotly_chart(fig_taux, use_container_width=True, config=PLOTLY_CONFIG)
 
-            # Détection des mois avec taux anormal
             mois_anormaux = pertes_par_mois[pertes_par_mois["TAUX_PERTE"] > seuil_alerte]
             if not mois_anormaux.empty:
                 st.warning(f"{len(mois_anormaux)} mois depassent le seuil d'alerte ({seuil_alerte}%)")
                 for _, row in mois_anormaux.tail(3).iterrows():
                     st.markdown(f"- {MOIS_FR.get(row['MOIS_PROD'], row['MOIS_PROD'])} {row['ANNEE_PROD']}: **{row['TAUX_PERTE']:.1f}%**")
-            else :
+            else:
                 st.success("Tous les mois respectent le seuil d'alerte")
 
-        # Analyse des pertes par type
         cols_pertes = ["PERDE_EN_BOUTEILLE", "PERDE_EN_CAPSULE", "PERDE_EN_ETIQUETTE", "PERDE_EN_CARTON", "QUANTITE_AVARIE"]
         cols_existants = [c for c in cols_pertes if c in df_prod.columns]
         
@@ -812,7 +844,6 @@ if not df_prod.empty and "QUANTITE_TOTALE" in df_prod.columns:
             
             st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
             
-            # Recommandation sur le principal type de perte
             type_max = cols_existants[pertes_by_type.argmax()]
             type_name = type_max.replace('PERDE_EN_', '').replace('_', ' ').title()
             st.info(f"Point d'attention : {type_name} represente la plus grande part des pertes - Prioriser l'amelioration sur ce poste")
@@ -825,8 +856,7 @@ st.markdown("---")
 if not ca_mensuel_all.empty:
     st.markdown("## Analyse de saisonnalite")
     
-    # Calcul des moyennes par mois sur toutes les annees
-    moyennes_par_mois = ca_mensuel_all.groupby("MOIS")["MONTANT_NET"].mean()
+    moyennes_par_mois = safe_get_moyennes_par_mois(ca_mensuel_all)
     mois_labels = [MOIS_FR.get(m, m) for m in range(1, 13)]
     
     fig = go.Figure()
@@ -843,7 +873,6 @@ if not ca_mensuel_all.empty:
         hovertemplate='<b>%{x}</b><br>CA moyen: %{y:,.0f} FCFA<extra></extra>'
     ))
     
-    # Ajout de la ligne de moyenne
     moyenne_globale = moyennes_par_mois.mean()
     fig.add_hline(
         y=moyenne_globale,
@@ -865,7 +894,6 @@ if not ca_mensuel_all.empty:
     
     st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
     
-    # Identifier les pics et creux
     mois_pic = moyennes_par_mois.idxmax()
     mois_creux = moyennes_par_mois.idxmin()
     
@@ -877,23 +905,23 @@ if not ca_mensuel_all.empty:
         st.warning(f"Creux d'activite : {MOIS_FR.get(mois_creux, mois_creux)}")
         st.caption("-> Planifier la maintenance et les formations")
 
-st.markdown("---")
-
 # ==========================================================
-# SECTION 5.5 : PREVISIONS DES PERTES (modèle dédié)
+# SECTION 5.5 : PREVISIONS DES PERTES
 # ==========================================================
 st.markdown("---")
 st.markdown("## Prévisions des pertes")
 
+previsions_pertes = None
+mae_loss = None
+mois_futurs_loss_labels = []
+
 if not df_prod.empty and "PERTES_TOTALES" in df_prod.columns and "QUANTITE_TOTALE" in df_prod.columns:
     
-    # Préparer les données de pertes par mois
     if "DATE_PRODUCTION" in df_prod.columns:
         df_prod["DATE_PROD"] = pd.to_datetime(df_prod["DATE_PRODUCTION"], errors="coerce")
         df_prod["MOIS_PROD"] = df_prod["DATE_PROD"].dt.month
         df_prod["ANNEE_PROD"] = df_prod["DATE_PROD"].dt.year
         
-        # Agréger les pertes par mois
         pertes_mensuelles = df_prod.groupby(["ANNEE_PROD", "MOIS_PROD"]).agg({
             "PERTES_TOTALES": "sum",
             "QUANTITE_TOTALE": "sum"
@@ -903,22 +931,31 @@ if not df_prod.empty and "PERTES_TOTALES" in df_prod.columns and "QUANTITE_TOTAL
         
         if len(pertes_mensuelles) >= 6:
             
-            # Créer un ordre temporel
             pertes_mensuelles = pertes_mensuelles.sort_values(["ANNEE_PROD", "MOIS_PROD"])
             pertes_mensuelles["ORDRE"] = range(len(pertes_mensuelles))
             
-            # Features cycliques pour les pertes
             pertes_mensuelles["MOIS_SIN"] = np.sin(2 * np.pi * pertes_mensuelles["MOIS_PROD"] / 12)
             pertes_mensuelles["MOIS_COS"] = np.cos(2 * np.pi * pertes_mensuelles["MOIS_PROD"] / 12)
             
-            # Modèle pour volume de pertes
-            X_loss = pertes_mensuelles[["ORDRE", "MOIS_SIN", "MOIS_COS"]]
-            y_loss = pertes_mensuelles["PERTES_TOTALES"]
+            train_size_loss = min(len(pertes_mensuelles) - 3, int(len(pertes_mensuelles) * 0.8))
+            train_loss = pertes_mensuelles.iloc[:train_size_loss]
+            
+            X_loss = train_loss[["ORDRE", "MOIS_SIN", "MOIS_COS"]]
+            y_loss = train_loss["PERTES_TOTALES"]
             
             model_loss = LinearRegression()
             model_loss.fit(X_loss, y_loss)
             
-            # Prévision des pertes sur 6 mois
+            if len(pertes_mensuelles) > train_size_loss:
+                test_loss = pertes_mensuelles.iloc[train_size_loss:]
+                X_test_loss = test_loss[["ORDRE", "MOIS_SIN", "MOIS_COS"]]
+                y_test_loss = test_loss["PERTES_TOTALES"]
+                y_pred_test_loss = model_loss.predict(X_test_loss)
+                mae_loss = mean_absolute_error(y_test_loss, y_pred_test_loss)
+            else:
+                y_pred_train_loss = model_loss.predict(X_loss)
+                mae_loss = mean_absolute_error(y_loss, y_pred_train_loss)
+            
             derniere_position_loss = pertes_mensuelles["ORDRE"].max()
             dernier_mois_loss = pertes_mensuelles.iloc[-1]["MOIS_PROD"]
             derniere_annee_loss = pertes_mensuelles.iloc[-1]["ANNEE_PROD"]
@@ -930,13 +967,8 @@ if not df_prod.empty and "PERTES_TOTALES" in df_prod.columns and "QUANTITE_TOTAL
             })
             
             previsions_pertes = model_loss.predict(mois_futur_loss)
-            previsions_pertes = np.maximum(previsions_pertes, 0)  # Pas de pertes négatives
+            previsions_pertes = np.maximum(previsions_pertes, 0)
             
-            # Calcul de l'erreur du modèle
-            y_pred_loss = model_loss.predict(X_loss)
-            mae_loss = mean_absolute_error(y_loss, y_pred_loss)
-            
-            # Labels pour les mois futurs
             mois_futurs_loss_labels = []
             for i in range(6):
                 mois_fut = dernier_mois_loss + i + 1
@@ -946,7 +978,6 @@ if not df_prod.empty and "PERTES_TOTALES" in df_prod.columns and "QUANTITE_TOTAL
                     annee_fut += 1
                 mois_futurs_loss_labels.append(f"{MOIS_ABBR.get(mois_fut, mois_fut)} {annee_fut}")
             
-            # Affichage des prévisions
             st.markdown("### Prévisions des pertes - 6 mois")
             
             col_loss1, col_loss2, col_loss3 = st.columns(3)
@@ -959,10 +990,8 @@ if not df_prod.empty and "PERTES_TOTALES" in df_prod.columns and "QUANTITE_TOTAL
                 tendance_pertes = "HAUSSIÈRE" if previsions_pertes[-1] > previsions_pertes[0] else "BAISSIÈRE"
                 st.metric("Tendance prévue", tendance_pertes)
             
-            # Graphique historique + prévision des pertes
             fig_loss = go.Figure()
             
-            # Labels historiques (12 derniers mois)
             historiques_loss_labels = [f"{MOIS_ABBR.get(row['MOIS_PROD'], row['MOIS_PROD'])} {row['ANNEE_PROD']}" 
                                        for _, row in pertes_mensuelles.tail(12).iterrows()]
             historiques_loss_vals = pertes_mensuelles.tail(12)["PERTES_TOTALES"].values
@@ -987,7 +1016,6 @@ if not df_prod.empty and "PERTES_TOTALES" in df_prod.columns and "QUANTITE_TOTAL
                 hovertemplate='<b>Prévision</b><br>Periode: %{x}<br>Pertes estimées: %{y:,.0f}<extra></extra>'
             ))
             
-            # Zone de confiance
             fig_loss.add_trace(go.Scatter(
                 x=mois_futurs_loss_labels + mois_futurs_loss_labels[::-1],
                 y=list(previsions_pertes + mae_loss) + list((previsions_pertes - mae_loss)[::-1]),
@@ -1010,8 +1038,6 @@ if not df_prod.empty and "PERTES_TOTALES" in df_prod.columns and "QUANTITE_TOTAL
             
             st.plotly_chart(fig_loss, use_container_width=True, config=PLOTLY_CONFIG)
             
-            # Interprétation et recommandations
-            ratio_perte_ca = 0
             if "MONTANT_NET" in facture.columns:
                 ca_moyen_mensuel = facture.groupby(facture["DATE_CREATION"].dt.to_period("M"))["MONTANT_NET"].sum().mean()
                 valeur_moyenne_par_perte = ca_moyen_mensuel / max(y_loss.mean(), 1)
@@ -1022,11 +1048,10 @@ if not df_prod.empty and "PERTES_TOTALES" in df_prod.columns and "QUANTITE_TOTAL
                     <b>Impact business estimé</b><br>
                     - Pertes moyennes prévues : <b>{previsions_pertes.mean():.0f} unités/mois</b><br>
                     - Coût estimé des pertes : <b>{format_cfa(cout_prevu_pertes)}/mois</b><br>
-                    - Recommandation : {"Urgence - Action corrective nécessaire" if previsions_pertes.mean() > pertes_moyennes_historiques * 1.2 else "🟢 Situation sous contrôle"}
+                    - Recommandation : {"🔴 Urgence - Action corrective nécessaire" if previsions_pertes.mean() > pertes_moyennes_historiques * 1.2 else "🟢 Situation sous contrôle"}
                 </div>
                 """, unsafe_allow_html=True)
             
-            # Alerte si prévision anormalement haute
             if previsions_pertes.mean() > pertes_moyennes_historiques * 1.3:
                 st.error("ALERTE : Hausse significative des pertes prévue dans les mois à venir !")
             elif previsions_pertes.mean() > pertes_moyennes_historiques * 1.1:
@@ -1057,13 +1082,9 @@ cas_ml = st.radio(
     label_visibility="collapsed"
 )
 
-# ==========================================================
-# 6.1 PREVISION DES VENTES DETAILLEE
-# ==========================================================
 if cas_ml == "Prevision des ventes (detaillee)":
     st.markdown("### Prevision des ventes - Modele avance")
     
-    # Preparation des donnees avec features cycliques
     ca_mensuel = (
         facture
         .groupby(["ANNEE", "MOIS"])["MONTANT_NET"]
@@ -1074,7 +1095,6 @@ if cas_ml == "Prevision des ventes (detaillee)":
     if len(ca_mensuel) >= 6:
         st.markdown("#### Donnees historiques (12 derniers mois)")
         
-        # Afficher les donnees historiques formatees
         ca_mensuel_display = ca_mensuel.tail(12).copy()
         ca_mensuel_display["CA"] = ca_mensuel_display["MONTANT_NET"].apply(format_cfa)
         ca_mensuel_display["Periode"] = ca_mensuel_display.apply(
@@ -1082,7 +1102,6 @@ if cas_ml == "Prevision des ventes (detaillee)":
         )
         st.dataframe(ca_mensuel_display[["Periode", "CA"]], use_container_width=True, hide_index=True)
         
-        # Modele avec features cycliques
         ca_mensuel["MOIS_SIN"] = np.sin(2 * np.pi * ca_mensuel["MOIS"] / 12)
         ca_mensuel["MOIS_COS"] = np.cos(2 * np.pi * ca_mensuel["MOIS"] / 12)
         
@@ -1092,7 +1111,6 @@ if cas_ml == "Prevision des ventes (detaillee)":
         model = LinearRegression()
         model.fit(X, y)
         
-        # Prevision pour 24 mois
         mois_futur = pd.DataFrame({
             "MOIS": list(range(1, 13)) * 2,
             "MOIS_SIN": np.sin(2 * np.pi * np.arange(1, 25) / 12),
@@ -1100,10 +1118,8 @@ if cas_ml == "Prevision des ventes (detaillee)":
         })
         ca_prevu = model.predict(mois_futur)
         
-        # Graphique avec Plotly
         historique_x = [f"{MOIS_ABBR.get(row['MOIS'], row['MOIS'])} {row['ANNEE']}" for _, row in ca_mensuel.iterrows()]
         
-        # Labels pour les previsions
         annee_fin = ca_mensuel.iloc[-1]["ANNEE"]
         dernier_mois = ca_mensuel.iloc[-1]["MOIS"]
         
@@ -1153,7 +1169,6 @@ if cas_ml == "Prevision des ventes (detaillee)":
         
         st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
         
-        # Interpretation
         derniere_valeur = ca_mensuel["MONTANT_NET"].iloc[-1]
         premiere_prevision = ca_prevu[0]
         
@@ -1164,20 +1179,41 @@ if cas_ml == "Prevision des ventes (detaillee)":
     else:
         st.warning("Donnees insuffisantes pour la prevision (minimum 6 mois d'historique requis)")
 
-# ==========================================================
-# 6.2 RISQUE DE RUPTURE DE STOCK
-# ==========================================================
 elif cas_ml == "Risque de rupture de stock":
     st.markdown("### Analyse du risque de rupture de stock")
     
     if not stock.empty and "QUANTITE" in stock.columns and len(stock) > 0:
         seuil = stock["QUANTITE"].quantile(0.2)
-        stock["RISQUE_RUPTURE"] = stock["QUANTITE"] < seuil
-        stock["NIVEAU_RISQUE"] = pd.cut(
-            stock["QUANTITE"],
-            bins=[-float('inf'), seuil/2, seuil, float('inf')],
-            labels=["CRITIQUE", "ELEVE", "OK"]
-        )
+        
+        # Éviter les bins dupliqués quand seuil est trop petit
+        if seuil <= 0:
+            # Si le seuil est 0 ou négatif, tous les stocks sont OK
+            stock["RISQUE_RUPTURE"] = False
+            stock["NIVEAU_RISQUE"] = "OK"
+            st.success("Niveau de stock satisfaisant - Aucun risque de rupture detecte")
+        else:
+            # Calcul des bins uniques
+            bin_edges = [-float('inf'), seuil/2, seuil, float('inf')]
+            
+            # Supprimer les doublons dans les bins
+            bin_edges = sorted(set(bin_edges))
+            
+            # Ajuster les labels en fonction du nombre de bins
+            if len(bin_edges) == 3:
+                # Cas où seuil/2 == seuil (impossible normalement car seuil > 0)
+                labels = ["CRITIQUE", "OK"]
+            elif len(bin_edges) == 4:
+                labels = ["CRITIQUE", "ELEVE", "OK"]
+            else:
+                labels = ["OK"]
+            
+            stock["RISQUE_RUPTURE"] = stock["QUANTITE"] < seuil
+            stock["NIVEAU_RISQUE"] = pd.cut(
+                stock["QUANTITE"],
+                bins=bin_edges,
+                labels=labels,
+                duplicates='drop'  # Supprime automatiquement les doublons
+            )
         
         # Graphique de distribution
         fig = go.Figure()
@@ -1203,17 +1239,27 @@ elif cas_ml == "Risque de rupture de stock":
         
         st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
         
-        # Affichage des produits a risque
         produits_risque = stock[stock["RISQUE_RUPTURE"]].copy()
         
-        if not produits_risque.empty:
+        if not produits_risque.empty and seuil > 0:
             st.warning(f"{len(produits_risque)} produits en risque de rupture")
             
-            # Ajout d'une colonne de priorisation
+            # Éviter aussi les bins dupliqués ici
+            bin_edges_priorite = [-float('inf'), seuil/4, seuil/2, seuil]
+            bin_edges_priorite = sorted(set(bin_edges_priorite))
+            
+            if len(bin_edges_priorite) == 3:
+                priorite_labels = ["URGENT", "MOYENNE"]
+            elif len(bin_edges_priorite) == 4:
+                priorite_labels = ["URGENT", "HAUTE", "MOYENNE"]
+            else:
+                priorite_labels = ["URGENT"]
+            
             produits_risque["PRIORITE"] = pd.cut(
                 produits_risque["QUANTITE"],
-                bins=[-float('inf'), seuil/4, seuil/2, seuil],
-                labels=["URGENT", "HAUTE", "MOYENNE"]
+                bins=bin_edges_priorite,
+                labels=priorite_labels,
+                duplicates='drop'
             )
             
             cols_affichage = ["DESIGNATION", "QUANTITE", "PRIORITE"] if "DESIGNATION" in produits_risque.columns else ["QUANTITE", "PRIORITE"]
@@ -1221,18 +1267,14 @@ elif cas_ml == "Risque de rupture de stock":
             
             if len(produits_risque) > len(stock) * 0.3:
                 st.error("URGENCE : Plus de 30% du stock est critique !")
-        else:
+        elif seuil > 0:
             st.success("Niveau de stock satisfaisant - Aucun risque de rupture detecte")
     else:
         st.info("Donnees de stock insuffisantes pour l'analyse")
 
-# ==========================================================
-# 6.3 DETECTION D'ANOMALIES
-# ==========================================================
 elif cas_ml == "Detection d'anomalies (pertes)":
     st.markdown("### Detection d'anomalies - Pertes & avaries")
     
-    # Chercher les colonnes de pertes
     perte_cols = []
     
     if not df_prod.empty:
@@ -1256,7 +1298,6 @@ elif cas_ml == "Detection d'anomalies (pertes)":
         
         anomalies = df_to_use[df_to_use["ANOMALIE"] == -1]
         
-        # Metriques
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Total lignes analysees", len(df_to_use))
@@ -1269,7 +1310,6 @@ elif cas_ml == "Detection d'anomalies (pertes)":
         if not anomalies.empty:
             st.warning(f"{len(anomalies)} anomalies detectees - A analyser en priorite")
             
-            # Affichage des anomalies
             cols_affichage = perte_cols + (["DATE_PRODUCTION"] if "DATE_PRODUCTION" in df_to_use.columns else [])
             cols_affichage = [c for c in cols_affichage if c in anomalies.columns]
             st.dataframe(anomalies[cols_affichage].head(20), use_container_width=True)
@@ -1279,9 +1319,6 @@ elif cas_ml == "Detection d'anomalies (pertes)":
         else:
             st.success("Aucune anomalie detectee - Processus de production stable")
 
-# ==========================================================
-# 6.4 ML UTILISATEURS
-# ==========================================================
 elif cas_ml == "ML Utilisateurs (admin)":
     st.markdown("### Classification utilisateurs")
     
@@ -1337,7 +1374,6 @@ st.markdown("## Alertes & recommandations automatiques")
 
 alertes = []
 
-# Alerte ventes
 if len(ca_mensuel_all) >= 3 and not ca_mensuel_all.empty:
     ca_recent = ca_mensuel_all.tail(3)["MONTANT_NET"].mean()
     ca_historique = ca_mensuel_all.head(-3)["MONTANT_NET"].mean() if len(ca_mensuel_all) > 6 else ca_mensuel_all["MONTANT_NET"].mean()
@@ -1345,28 +1381,27 @@ if len(ca_mensuel_all) >= 3 and not ca_mensuel_all.empty:
     if ca_recent < ca_historique * 0.8:
         alertes.append(("Ventes", f"Baisse significative detectee sur les 3 derniers mois (-{((1 - ca_recent/ca_historique)*100):.0f}%)"))
 
-# Alerte stock
 if not stock.empty and "QUANTITE" in stock.columns and len(stock) > 0:
     seuil_stock = stock["QUANTITE"].quantile(0.15)
     stocks_critiques = stock[stock["QUANTITE"] < seuil_stock]
     if not stocks_critiques.empty:
         alertes.append(("Stock", f"{len(stocks_critiques)} produits en risque de rupture"))
 
-# Alerte pertes
 if not df_prod.empty and "PERTES_TOTALES" in df_prod.columns:
     if df_prod["PERTES_TOTALES"].sum() > 0:
         pertes_moyennes = df_prod["PERTES_TOTALES"].mean()
         if pertes_moyennes > 100:
             alertes.append(("Pertes", f"Niveau de pertes anormalement eleve ({pertes_moyennes:.0f} unites moyenne)"))
 
-# Alerte saisonniere
-if not ca_mensuel_all.empty and 'moyennes_par_mois' in locals():
-    dernier_mois_actuel = datetime.now().month
-    ca_mois_actuel = ca_mensuel_all[ca_mensuel_all["MOIS"] == dernier_mois_actuel]["MONTANT_NET"].values
-    if len(ca_mois_actuel) > 0:
-        ca_moyen_mois = moyennes_par_mois[dernier_mois_actuel] if dernier_mois_actuel in moyennes_par_mois.index else 0
-        if ca_moyen_mois > 0 and ca_mois_actuel[0] < ca_moyen_mois * 0.7:
-            alertes.append(("Saisonnalite", f"Performance anormalement faible pour {MOIS_FR.get(dernier_mois_actuel, dernier_mois_actuel)}"))
+if not ca_mensuel_all.empty:
+    moyennes_par_mois_alerte = safe_get_moyennes_par_mois(ca_mensuel_all)
+    if not moyennes_par_mois_alerte.empty:
+        dernier_mois_actuel = datetime.now().month
+        ca_mois_actuel = ca_mensuel_all[ca_mensuel_all["MOIS"] == dernier_mois_actuel]["MONTANT_NET"].values
+        if len(ca_mois_actuel) > 0:
+            ca_moyen_mois = moyennes_par_mois_alerte[dernier_mois_actuel] if dernier_mois_actuel in moyennes_par_mois_alerte.index else 0
+            if ca_moyen_mois > 0 and ca_mois_actuel[0] < ca_moyen_mois * 0.7:
+                alertes.append(("Saisonnalite", f"Performance anormalement faible pour {MOIS_FR.get(dernier_mois_actuel, dernier_mois_actuel)}"))
 
 if alertes:
     for alerte in alertes:
@@ -1378,13 +1413,12 @@ else:
 # EXPORT DES PREVISIONS (version robuste)
 # ==========================================================
 
-# Téléchargement des prévisions
-if 'previsions' in locals() and len(previsions) > 0:
+if 'previsions' in locals() and previsions is not None and len(previsions) > 0:
     previsions_df = pd.DataFrame({
-        "Periode": mois_futurs_labels if 'mois_futurs_labels' in locals() else [f"M+{i+1}" for i in range(len(previsions))],
+        "Periode": mois_futurs_labels if mois_futurs_labels else [f"M+{i+1}" for i in range(len(previsions))],
         "Prevision_CA_CFA": previsions,
-        "Borne_Inferieure": previsions - mae if 'mae' in locals() else previsions * 0.9,
-        "Borne_Superieure": previsions + mae if 'mae' in locals() else previsions * 1.1
+        "Borne_Inferieure": previsions - mae if mae is not None else previsions * 0.9,
+        "Borne_Superieure": previsions + mae if mae is not None else previsions * 1.1
     })
 
     csv_data = previsions_df.to_csv(index=False).encode('utf-8')
@@ -1396,12 +1430,12 @@ if 'previsions' in locals() and len(previsions) > 0:
         mime="text/csv"
     )
 
-if 'previsions_pertes' in locals() and len(previsions_pertes) > 0:
+if 'previsions_pertes' in locals() and previsions_pertes is not None and len(previsions_pertes) > 0:
     previsions_pertes_df = pd.DataFrame({
-        "Periode": mois_futurs_loss_labels if 'mois_futurs_loss_labels' in locals() else [f"M+{i+1}" for i in range(len(previsions_pertes))],
+        "Periode": mois_futurs_loss_labels if mois_futurs_loss_labels else [f"M+{i+1}" for i in range(len(previsions_pertes))],
         "Prevision_Pertes_Unites": previsions_pertes,
-        "Borne_Inferieure": previsions_pertes - mae_loss if 'mae_loss' in locals() else previsions_pertes * 0.9,
-        "Borne_Superieure": previsions_pertes + mae_loss if 'mae_loss' in locals() else previsions_pertes * 1.1
+        "Borne_Inferieure": previsions_pertes - mae_loss if mae_loss is not None else previsions_pertes * 0.9,
+        "Borne_Superieure": previsions_pertes + mae_loss if mae_loss is not None else previsions_pertes * 1.1
     })
 
     csv_data_pertes = previsions_pertes_df.to_csv(index=False).encode('utf-8')
