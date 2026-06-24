@@ -16,9 +16,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, r2_score
 from db import get_data
 import warnings
-from fpdf import FPDF
-import tempfile 
-import os
+
 warnings.filterwarnings('ignore')
 
 # ==========================================================
