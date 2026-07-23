@@ -7,7 +7,6 @@ from datetime import datetime
 # ==========================================================
 st.set_page_config(
     page_title="N'NAM Jus - Guide & Méthodologie",
-    page_icon="📖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -52,13 +51,13 @@ st.markdown("""
 # ==========================================================
 # TITRE
 # ==========================================================
-st.title("📖 Guide, Lexique & Méthodologie")
+st.title("Guide, Lexique & Méthodologie")
 st.caption("Dictionnaire des données · Formules · Interprétations · Seuils d'alerte")
 
 # ==========================================================
 # SOMMAIRE
 # ==========================================================
-with st.expander("📚 Sommaire", expanded=True):
+with st.expander("Sommaire", expanded=True):
     st.markdown("""
     1. [Lexique des Termes](#1-lexique-des-termes)
     2. [Dictionnaire des Données](#2-dictionnaire-des-données)
@@ -241,7 +240,7 @@ st.markdown("---")
 # ==========================================================
 st.markdown("## 3. Formules de Calcul")
 
-with st.expander("💰 Formules Commerciales", expanded=True):
+with st.expander("Formules Commerciales", expanded=True):
     st.markdown("""
     <div class="formule-box">
     <b>Chiffre d'Affaires (CA)</b><br>
@@ -259,13 +258,13 @@ with st.expander("💰 Formules Commerciales", expanded=True):
     </div>
     
     <div class="exemple-box">
-    <b>💡 Exemple :</b><br>
+    <b> Exemple :</b><br>
     CA Total = 22 500 000 FCFA<br>
     Zone Mfoundi = 5 200 000 FCFA → Part = 23,1%
     </div>
     """)
 
-with st.expander("🏭 Formules de Production", expanded=True):
+with st.expander("Formules de Production", expanded=True):
     st.markdown("""
     <div class="formule-box">
     <b>Taux de Perte</b><br>
@@ -284,13 +283,13 @@ with st.expander("🏭 Formules de Production", expanded=True):
     </div>
     
     <div class="alerte-box">
-    <b>⚠️ Interprétation :</b><br>
+    <b> Interprétation :</b><br>
     Écart > 0 → Surproduction (stocks qui dorment)<br>
     Écart < 0 → Sous-production (rupture potentielle)
     </div>
     """)
 
-with st.expander("📊 Formules de Saisonnalité", expanded=True):
+with st.expander("Formules de Saisonnalité", expanded=True):
     st.markdown("""
     <div class="formule-box">
     <b>Coefficient de Saisonnalité (Mois X)</b><br>
@@ -303,14 +302,14 @@ with st.expander("📊 Formules de Saisonnalité", expanded=True):
     </div>
     
     <div class="exemple-box">
-    <b>💡 Exemple :</b><br>
+    <b>Exemple :</b><br>
     CA Moyen Mensuel = 2 000 000 FCFA<br>
-    CA Mai = 2 600 000 → Coeff = 1,30 (Fort potentiel 🟢)<br>
-    CA Novembre = 1 500 000 → Coeff = 0,75 (Faible 🔴)
+    CA Mai = 2 600 000 → Coeff = 1,30 (Fort potentiel)<br>
+    CA Novembre = 1 500 000 → Coeff = 0,75 (Faible)
     </div>
     """)
 
-with st.expander("🚛 Formules Transport & Logistique", expanded=True):
+with st.expander("Formules Transport & Logistique", expanded=True):
     st.markdown("""
     <div class="formule-box">
     <b>Coût Carburant par km</b><br>
@@ -328,7 +327,7 @@ with st.expander("🚛 Formules Transport & Logistique", expanded=True):
     </div>
     
     <div class="exemple-box">
-    <b>💡 Exemple (Toyota Hiace Diesel) :</b><br>
+    <b>Exemple (Toyota Hiace Diesel) :</b><br>
     Conso : 9,5 L/100km | Gasoil : 630 FCFA/L<br>
     Coût/km = 0,095 × 630 = 59,85 FCFA/km<br>
     Avec entretien (75 FCFA/km) → 134,85 FCFA/km<br>
@@ -336,7 +335,7 @@ with st.expander("🚛 Formules Transport & Logistique", expanded=True):
     </div>
     """)
 
-with st.expander("🏢 Formules Financières", expanded=True):
+with st.expander("Formules Financières", expanded=True):
     st.markdown("""
     <div class="formule-box">
     <b>Seuil de Rentabilité</b><br>
@@ -359,7 +358,7 @@ with st.expander("🏢 Formules Financières", expanded=True):
     </div>
     
     <div class="exemple-box">
-    <b>💡 Exemple Seuil de Rentabilité :</b><br>
+    <b> Exemple Seuil de Rentabilité :</b><br>
     Charges Fixes = 15 000 000 FCFA<br>
     Charges Variables = 45% du CA → Marge = 55%<br>
     SR = 15 000 000 ÷ 0,55 = 27 272 727 FCFA<br>
@@ -387,7 +386,7 @@ seuils_data = {
         "Marge transport",
         "ROI",
     ],
-    "Seuil Critique 🔴": [
+    "Seuil Critique": [
         "Baisse > 20% vs N-1",
         "< 70%",
         "> 10%",
@@ -399,7 +398,7 @@ seuils_data = {
         "< 0%",
         "< 5%",
     ],
-    "Seuil Attention 🟠": [
+    "Seuil Attention": [
         "Baisse 10-20%",
         "70-80%",
         "5-10%",
@@ -411,7 +410,7 @@ seuils_data = {
         "0-40%",
         "5-10%",
     ],
-    "Seuil Bon 🟢": [
+    "Seuil Bon": [
         "Stable ou hausse",
         "> 80%",
         "< 5%",
@@ -494,7 +493,7 @@ st.markdown("---")
 st.markdown("## 6. Méthodologie Machine Learning")
 
 st.markdown("""
-### 🤖 Modèle de Prévision : Random Forest Regressor
+### Modèle de Prévision : Random Forest Regressor
 
 **Principe :**
 Le Random Forest est un algorithme qui crée plusieurs arbres de décision aléatoires 
@@ -532,7 +531,7 @@ st.markdown("---")
 st.markdown("## 7. Sources de Données")
 
 st.markdown("""
-### 🗄️ Base de données : `sellams_namm`
+### Base de données : `sellams_namm`
 
 | Table | Rôle | Fréquence MAJ |
 |-------|------|---------------|
@@ -551,4 +550,4 @@ st.markdown("""
 # FOOTER
 # ==========================================================
 st.markdown("---")
-st.caption(f"📖 Guide & Méthodologie — N'NAM AGRO INDUSTRIE | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y')}")
+st.caption(f"Guide & Méthodologie — N'NAM AGRO INDUSTRIE | Dernière mise à jour : {datetime.now().strftime('%d/%m/%Y')}")
