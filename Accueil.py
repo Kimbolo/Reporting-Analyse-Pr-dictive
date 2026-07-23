@@ -272,103 +272,159 @@ if not facture_f.empty:
 # PARTIE 3 : SIMULATION DIRECTION
 # ==========================================================
 st.markdown("---")
-st.markdown("## Simulation Direction")
-st.caption("Évaluez l'impact d'une augmentation de capital sur la performance financière")
+st.markdown("## Simulation Direction — Augmentation de Capital")
+st.caption("Analyse d'impact financier · Répartition des ressources · Projection de rentabilité")
 
-with st.expander("Paramètres de simulation", expanded=True):
+with st.expander("Paramètres de la Simulation", expanded=True):
     
-    st.markdown("#### Données actuelles de l'entreprise")
-    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+    # ============================================
+    # SECTION 1 : SITUATION ACTUELLE
+    # ============================================
+    st.markdown("### Situation Actuelle de l'Entreprise")
     
-    with col_s1:
+    col_a1, col_a2, col_a3 = st.columns(3)
+    
+    with col_a1:
         capital_actuel = st.number_input(
-            "Capital Actuel (FCFA)",
+            "Capital Social Actuel (FCFA)",
             value=10000000, step=1000000, format="%d",
-            help="Capital social actuel de l'entreprise"
+            help="Capital social inscrit au bilan"
         )
-    with col_s2:
-        augmentation = st.number_input(
-            "Augmentation envisagée (FCFA)",
-            value=5000000, step=1000000, format="%d",
-            help="Montant de l'augmentation de capital que vous souhaitez simuler"
-        )
-    with col_s3:
-        ca_actuel_input = st.number_input(
-            "CA Annuel Actuel (FCFA)",
+    with col_a2:
+        ca_actuel = st.number_input(
+            "Chiffre d'Affaires Annuel (FCFA)",
             value=int(ca_total) if ca_total > 0 else 50000000,
             step=1000000, format="%d",
-            help="Chiffre d'affaires annuel de référence"
+            help="CA réalisé sur les 12 derniers mois"
         )
-    with col_s4:
-        charges_fixes = st.number_input(
-            "Charges Fixes Annuelles (FCFA)",
-            value=15000000, step=1000000, format="%d",
-            help="Loyer, salaires, électricité, maintenance, etc."
+    with col_a3:
+        resultat_actuel_input = st.number_input(
+            "Résultat Net Actuel (FCFA)",
+            value=5000000, step=500000, format="%d",
+            help="Bénéfice ou perte nette actuelle"
         )
     
-    st.markdown("#### Hypothèses de projection")
-    col_h1, col_h2, col_h3 = st.columns(3)
+    st.markdown("---")
+    
+    # ============================================
+    # SECTION 2 : MONTANT ET AFFECTATION
+    # ============================================
+    st.markdown("### Augmentation de Capital & Affectation")
+    
+    col_b1, col_b2 = st.columns([1, 2])
+    
+    with col_b1:
+        augmentation = st.number_input(
+            "Montant de l'Augmentation (FCFA)",
+            value=5000000, step=1000000, format="%d",
+            help="Montant total de l'augmentation de capital envisagée"
+        )
+    
+    with col_b2:
+        st.markdown("**Répartition de l'investissement :**")
+        pct_production = st.slider("Outil productif (%)", 0, 100, 50, 5, 
+                                    help="Machines, équipements, ligne d'embouteillage, maintenance")
+        pct_commercial = st.slider("Développement commercial (%)", 0, 100 - pct_production, 30, 5,
+                                    help="Marketing, force de vente, nouveaux points de distribution")
+        pct_fdr = 100 - pct_production - pct_commercial
+        st.caption(f"Fonds de roulement : **{pct_fdr}%** (trésorerie, stocks, imprévus)")
+    
+    # Affichage des montants
+    montant_production = augmentation * pct_production / 100
+    montant_commercial = augmentation * pct_commercial / 100
+    montant_fdr = augmentation * pct_fdr / 100
+    
+    col_m1, col_m2, col_m3 = st.columns(3)
+    with col_m1:
+        st.metric("Production", format_cfa(montant_production))
+    with col_m2:
+        st.metric("Commercial", format_cfa(montant_commercial))
+    with col_m3:
+        st.metric("Trésorerie", format_cfa(montant_fdr))
+    
+    st.markdown("---")
+    
+    # ============================================
+    # SECTION 3 : HYPOTHÈSES DÉTAILLÉES
+    # ============================================
+    st.markdown("### Hypothèses de Projection")
+    
+    st.caption("Ces hypothèses sont basées sur des ratios standards de l'industrie agroalimentaire.")
+    
+    col_h1, col_h2, col_h3, col_h4 = st.columns(4)
     
     with col_h1:
-        croissance_ca = st.slider(
-            "Croissance du CA attendue (%)",
-            0, 100, 20, 5,
-            help="Augmentation estimée du chiffre d'affaires grâce à l'investissement"
+        gain_productivite = st.slider(
+            "Gain de productivité (%)",
+            0, 50, 15, 5,
+            help="Réduction du coût de production unitaire grâce aux nouveaux équipements"
         )
+    
     with col_h2:
-        charges_var_pct = st.slider(
-            "Charges Variables (% du CA)",
-            0, 100, 45, 5,
-            help="Matières premières, emballages, transport (en % du CA)"
+        hausse_ca = st.slider(
+            "Hausse du CA attendue (%)",
+            0, 100, 25, 5,
+            help="Augmentation des ventes grâce à la force commerciale renforcée et aux nouveaux équipements"
         )
+    
     with col_h3:
-        reduction_cv = st.slider(
-            "Gain d'efficacité (% réduction CV)",
-            0, 30, 5, 1,
-            help="Réduction des charges variables grâce aux nouveaux équipements"
+        duree_amortissement = st.selectbox(
+            "Durée d'amortissement",
+            [3, 5, 7, 10],
+            index=1,
+            help="Durée sur laquelle l'investissement productif est amorti (ans)"
+        )
+    
+    with col_h4:
+        taux_charges_fixes = st.slider(
+            "Charges fixes / CA (%)",
+            10, 50, 30, 5,
+            help="Ratio charges fixes sur CA (loyer, salaires, électricité, etc.)"
         )
 
-# Bouton de calcul
-if st.button("Lancer la Simulation", type="primary", use_container_width=True):
+# ============================================
+# BOUTON DE CALCUL
+# ============================================
+if st.button("Lancer la Simulation Financière", type="primary", use_container_width=True):
     
-    # ============================================
-    # CALCULS
-    # ============================================
+    # Calculs détaillés
     nouveau_capital = capital_actuel + augmentation
-    nouveau_ca = ca_actuel_input * (1 + croissance_ca / 100)
     
-    # Charges variables actuelles et nouvelles
-    cv_actuelles = ca_actuel_input * (charges_var_pct / 100)
-    new_cv_pct = charges_var_pct * (1 - reduction_cv / 100)
-    nouvelles_cv = nouveau_ca * (new_cv_pct / 100)
+    # CA projeté
+    nouveau_ca = ca_actuel * (1 + hausse_ca / 100)
     
-    # Amortissement du nouvel investissement (15% par an)
-    amortissement = augmentation * 0.15
-    nouvelles_cf = charges_fixes + amortissement
+    # Charges fixes (proportionnelles au CA pour simplifier)
+    charges_fixes_actuelles = ca_actuel * taux_charges_fixes / 100
+    amortissement_annuel = montant_production / duree_amortissement
+    nouvelles_charges_fixes = charges_fixes_actuelles + amortissement_annuel + (montant_commercial * 0.2)
+    
+    # Charges variables (matières premières, emballages)
+    taux_cv_base = 45  # % du CA par défaut
+    charges_var_actuelles = ca_actuel * taux_cv_base / 100
+    nouveau_taux_cv = taux_cv_base * (1 - gain_productivite / 100)
+    nouvelles_charges_var = nouveau_ca * nouveau_taux_cv / 100
     
     # Résultats
-    resultat_actuel = ca_actuel_input - cv_actuelles - charges_fixes
-    nouveau_resultat = nouveau_ca - nouvelles_cv - nouvelles_cf
+    charges_totales_actuelles = charges_fixes_actuelles + charges_var_actuelles
+    charges_totales_nouvelles = nouvelles_charges_fixes + nouvelles_charges_var
+    resultat_actuel = ca_actuel - charges_totales_actuelles
+    nouveau_resultat = nouveau_ca - charges_totales_nouvelles
     
-    # Seuil de rentabilité
-    taux_marge_cv = 1 - (new_cv_pct / 100)
-    seuil_rentabilite = nouvelles_cf / taux_marge_cv if taux_marge_cv > 0 else 0
-    
-    # ROI et délai de récupération
-    delta_resultat = nouveau_resultat - resultat_actuel
-    roi = (delta_resultat / augmentation * 100) if augmentation > 0 else 0
-    delai_recup = (augmentation / delta_resultat) if delta_resultat > 0 else float('inf')
-    
-    # Rentabilité des capitaux propres
+    # Ratios
+    marge_nette_avant = (resultat_actuel / ca_actuel * 100) if ca_actuel > 0 else 0
+    marge_nette_apres = (nouveau_resultat / nouveau_ca * 100) if nouveau_ca > 0 else 0
     rcp_avant = (resultat_actuel / capital_actuel * 100) if capital_actuel > 0 else 0
     rcp_apres = (nouveau_resultat / nouveau_capital * 100) if nouveau_capital > 0 else 0
     
-    # Marge nette
-    marge_nette_avant = (resultat_actuel / ca_actuel_input * 100) if ca_actuel_input > 0 else 0
-    marge_nette_apres = (nouveau_resultat / nouveau_ca * 100) if nouveau_ca > 0 else 0
-    
-    # Point mort en mois de CA
+    # Seuil de rentabilité
+    marge_cv = 1 - nouveau_taux_cv / 100
+    seuil_rentabilite = nouvelles_charges_fixes / marge_cv if marge_cv > 0 else 0
     point_mort_mois = (seuil_rentabilite / (nouveau_ca / 12)) if nouveau_ca > 0 else 0
+    
+    # ROI
+    delta_resultat = nouveau_resultat - resultat_actuel
+    roi = (delta_resultat / augmentation * 100) if augmentation > 0 else 0
+    delai_recup = (augmentation / delta_resultat) if delta_resultat > 0 else float('inf')
     
     # ============================================
     # AFFICHAGE DES RÉSULTATS
@@ -376,208 +432,240 @@ if st.button("Lancer la Simulation", type="primary", use_container_width=True):
     st.markdown("---")
     st.markdown("## Résultats de la Simulation")
     
-    # KPIs comparatifs
-    st.markdown("### Indicateurs Financiers")
+    # KPIs principaux
+    col_k1, col_k2, col_k3, col_k4 = st.columns(4)
     
+    with col_k1:
+        st.metric("CA Projeté", format_cfa(nouveau_ca),
+                 delta=f"+{format_cfa(nouveau_ca - ca_actuel)}",
+                 help="Chiffre d'affaires annuel après investissement")
+    with col_k2:
+        st.metric("Résultat Net", format_cfa(nouveau_resultat),
+                 delta=f"{format_cfa(delta_resultat)} vs actuel",
+                 delta_color="normal" if delta_resultat >= 0 else "inverse")
+    with col_k3:
+        st.metric("Seuil de Rentabilité", format_cfa(seuil_rentabilite),
+                 help="CA minimum pour couvrir toutes les charges")
+    with col_k4:
+        st.metric("ROI", f"{roi:.1f}%",
+                 delta="Excellent" if roi > 20 else ("Bon" if roi > 10 else "Faible"),
+                 help="Retour sur investissement annuel")
+    
+    # Ratios de rentabilité
     col_r1, col_r2, col_r3, col_r4 = st.columns(4)
-    
     with col_r1:
-        st.metric(
-            "CA Projeté",
-            format_cfa(nouveau_ca),
-            delta=f"+{format_cfa(nouveau_ca - ca_actuel_input)}",
-            help="Chiffre d'affaires annuel après investissement"
-        )
-    with col_r2:
-        st.metric(
-            "Résultat Net",
-            format_cfa(nouveau_resultat),
-            delta=f"{format_cfa(delta_resultat)} vs actuel",
-            delta_color="normal" if delta_resultat >= 0 else "inverse",
-            help="Bénéfice ou perte après toutes les charges"
-        )
-    with col_r3:
-        st.metric(
-            "Seuil de Rentabilité",
-            format_cfa(seuil_rentabilite),
-            help="CA minimum à atteindre pour couvrir toutes les charges"
-        )
-    with col_r4:
-        st.metric(
-            "ROI",
-            f"{roi:.1f}%",
-            help="Retour sur investissement annuel"
-        )
-    
-    # Détail des marges
-    col_m1, col_m2, col_m3 = st.columns(3)
-    with col_m1:
-        st.metric("Marge Nette Avant", f"{marge_nette_avant:.1f}%")
-    with col_m2:
-        st.metric("Marge Nette Après", f"{marge_nette_apres:.1f}%",
+        st.metric("Marge Nette", f"{marge_nette_apres:.1f}%",
                  delta=f"{marge_nette_apres - marge_nette_avant:+.1f} pts")
-    with col_m3:
-        st.metric("RCP Après", f"{rcp_apres:.1f}%",
+    with col_r2:
+        st.metric("RCP", f"{rcp_apres:.1f}%",
                  delta=f"{rcp_apres - rcp_avant:+.1f} pts",
                  help="Rentabilité des Capitaux Propres")
+    with col_r3:
+        st.metric("Point Mort", f"{point_mort_mois:.1f} mois",
+                 help="Mois d'activité pour atteindre le seuil de rentabilité")
+    with col_r4:
+        st.metric("Délai Récupération", f"{delai_recup:.1f} an(s)" if delai_recup != float('inf') else "> 10 ans")
     
-    # ============================================
-    # INTERPRÉTATION DÉTAILLÉE
-    # ============================================
     st.markdown("---")
-    st.markdown("### Analyse Détaillée")
-    
-    # Explication de la structure des coûts
-    st.markdown(f"""
-    <div class="explication-box">
-    <b>Structure financière projetée :</b><br><br>
-    
-    <b>1. Chiffre d'Affaires :</b> {format_cfa(nouveau_ca)} 
-    (soit une hausse de <b>{croissance_ca}%</b> grâce à l'investissement de {format_cfa(augmentation)})<br><br>
-    
-    <b>2. Charges Variables :</b> {format_cfa(nouvelles_cv)} 
-    ({new_cv_pct:.1f}% du CA, contre {charges_var_pct}% actuellement, soit <b>{reduction_cv}% d'économies</b>)<br>
-    <small> Cette réduction provient de l'efficacité des nouveaux équipements financés par l'investissement.</small><br><br>
-    
-    <b>3. Charges Fixes :</b> {format_cfa(nouvelles_cf)}
-    (dont {format_cfa(amortissement)} d'amortissement du nouvel investissement)<br>
-    <small> L'amortissement représente 15% de l'investissement par an, étalé sur la durée de vie des équipements.</small><br><br>
-    
-    <b>4. Résultat Net :</b> {format_cfa(nouveau_resultat)}
-    (CA − Charges Variables − Charges Fixes)<br>
-    <small> Le résultat net s'améliore de {format_cfa(delta_resultat)} par rapport à la situation actuelle.</small>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Interprétation du seuil de rentabilité
-    st.markdown(f"""
-    <div class="explication-box">
-    <b>Analyse du Seuil de Rentabilité :</b><br><br>
-    
-    Le seuil de rentabilité est de <b>{format_cfa(seuil_rentabilite)}</b>.<br>
-    Cela signifie que l'entreprise doit réaliser au minimum ce chiffre d'affaires pour couvrir l'ensemble de ses charges
-    (fixes + variables).<br><br>
-    
-    Avec un CA projeté de <b>{format_cfa(nouveau_ca)}</b>, le seuil est atteint en 
-    <b>{point_mort_mois:.1f} mois</b> d'activité.<br>
-    La marge de sécurité est de <b>{format_cfa(nouveau_ca - seuil_rentabilite)}</b> 
-    ({(nouveau_ca - seuil_rentabilite) / nouveau_ca * 100:.1f}% du CA).
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Interprétation du ROI
-    st.markdown(f"""
-    <div class="explication-box">
-    <b>Analyse du Retour sur Investissement :</b><br><br>
-    
-    Le ROI est de <b>{roi:.1f}%</b> par an.<br>
-    Cela signifie que chaque franc investi génère <b>{roi:.1f} francs</b> de résultat supplémentaire par an.<br><br>
-    
-    Le délai de récupération de l'investissement est estimé à 
-    <b>{delai_recup:.1f} an(s)</b>{" (investissement non récupérable en l'état)" if delai_recup == float('inf') else ""}.
-    </div>
-    """, unsafe_allow_html=True)
     
     # ============================================
-    # AVIS DÉCISIONNEL
+    # COMPTE DE RÉSULTAT COMPLET
     # ============================================
+    st.markdown("### Compte de Résultat Comparatif")
+    
+    cr_data = pd.DataFrame([
+        {"Poste": "CHIFFRE D'AFFAIRES", "Actuel": ca_actuel, "Projeté": nouveau_ca, 
+         "Variation": nouveau_ca - ca_actuel, "Type": "CA"},
+        {"Poste": "Charges Variables", "Actuel": charges_var_actuelles, "Projeté": nouvelles_charges_var,
+         "Variation": nouvelles_charges_var - charges_var_actuelles, "Type": "Charge"},
+        {"Poste": "Marge sur CV", "Actuel": ca_actuel - charges_var_actuelles, 
+         "Projeté": nouveau_ca - nouvelles_charges_var,
+         "Variation": (nouveau_ca - nouvelles_charges_var) - (ca_actuel - charges_var_actuelles), "Type": "Marge"},
+        {"Poste": "Charges Fixes", "Actuel": charges_fixes_actuelles, "Projeté": nouvelles_charges_fixes,
+         "Variation": nouvelles_charges_fixes - charges_fixes_actuelles, "Type": "Charge"},
+        {"Poste": "RÉSULTAT D'EXPLOITATION", "Actuel": resultat_actuel, "Projeté": nouveau_resultat,
+         "Variation": delta_resultat, "Type": "Résultat"},
+    ])
+    
+    cr_data['Actuel_F'] = cr_data['Actuel'].apply(format_cfa)
+    cr_data['Projeté_F'] = cr_data['Projeté'].apply(format_cfa)
+    cr_data['Variation_F'] = cr_data['Variation'].apply(lambda x: f"{x:+,.0f}".replace(",", " ") + " FCFA")
+    cr_data['% CA Actuel'] = (cr_data['Actuel'] / ca_actuel * 100).round(1)
+    cr_data['% CA Projeté'] = (cr_data['Projeté'] / nouveau_ca * 100).round(1)
+    
+    st.dataframe(
+        cr_data[['Poste', 'Actuel_F', '% CA Actuel', 'Projeté_F', '% CA Projeté', 'Variation_F']],
+        use_container_width=True, hide_index=True,
+        column_config={
+            'Poste': 'Poste',
+            'Actuel_F': 'Actuel',
+            '% CA Actuel': '% CA',
+            'Projeté_F': 'Projeté',
+            '% CA Projeté': '% CA',
+            'Variation_F': 'Variation'
+        }
+    )
+    
     st.markdown("---")
-    st.markdown("### Avis Décisionnel")
     
-    if nouveau_resultat > resultat_actuel and roi > 15 and delai_recup <= 3:
+    # ============================================
+    # DÉTAIL DE L'AFFECTATION DU CAPITAL
+    # ============================================
+    st.markdown("### Impact de l'Affectation du Capital")
+    
+    col_impact1, col_impact2, col_impact3 = st.columns(3)
+    
+    with col_impact1:
         st.markdown(f"""
-        <div class="resultat-box">
-        <b>RECOMMANDATION FAVORABLE : Procéder à l'investissement</b><br><br>
-        
-        L'augmentation de capital de <b>{format_cfa(augmentation)}</b> est <b>recommandée</b> pour les raisons suivantes :<br><br>
-        
-        Le résultat net progresse de <b>{format_cfa(delta_resultat)}</b> (+{marge_nette_apres - marge_nette_avant:.1f} pts de marge nette)<br>
-        Le ROI de <b>{roi:.1f}%</b> est supérieur au seuil minimum de 15%<br>
-        L'investissement est récupéré en <b>{delai_recup:.1f} an(s)</b><br>
-        La rentabilité des capitaux propres passe de {rcp_avant:.1f}% à <b>{rcp_apres:.1f}%</b><br>
-        Le seuil de rentabilité de {format_cfa(seuil_rentabilite)} est largement couvert par le CA projeté<br><br>
-        
-        <b>Prochaine étape :</b> Présenter ce dossier au conseil d'administration pour validation.
+        <div style="background: linear-gradient(135deg, #1f77b4, #4facfe); 
+                    padding: 20px; border-radius: 15px; color: white;">
+            <h4 style="margin:0 0 10px 0;">Outil Productif</h4>
+            <h2 style="margin:0 0 5px 0;">{format_cfa(montant_production)}</h2>
+            <p style="margin:0; font-size: 0.9em;">{pct_production}% de l'investissement</p>
+            <hr style="border-color: rgba(255,255,255,0.3);">
+            <small>• Gain productivité : <b>{gain_productivite}%</b></small><br>
+            <small>• Amortissement/an : <b>{format_cfa(amortissement_annuel)}</b></small><br>
+            <small>• Durée : <b>{duree_amortissement} ans</b></small><br>
+            <small>• Économie CV : <b>{format_cfa(charges_var_actuelles - (ca_actuel * nouveau_taux_cv / 100))}</b>/an</small>
         </div>
         """, unsafe_allow_html=True)
-        
-    elif nouveau_resultat > resultat_actuel:
+    
+    with col_impact2:
         st.markdown(f"""
-        <div class="alerte-box">
-        <b>RECOMMANDATION MODÉRÉE : Étudier plus en détail</b><br><br>
-        
-        L'investissement de <b>{format_cfa(augmentation)}</b> améliore le résultat mais présente un ROI modéré.<br><br>
-        
-        Le résultat net progresse de <b>{format_cfa(delta_resultat)}</b><br>
-        Le ROI de <b>{roi:.1f}%</b> est inférieur aux attentes<br>
-        Le délai de récupération de <b>{delai_recup:.1f} ans</b> est long<br><br>
-        
-        <b>Suggestions d'amélioration :</b><br>
-        • Augmenter la part allouée au développement commercial pour booster le CA<br>
-        • Négocier de meilleures conditions d'achat pour réduire les charges variables<br>
-        • Revoir le montant de l'investissement à la baisse
+        <div style="background: linear-gradient(135deg, #ff7f0e, #f5576c); 
+                    padding: 20px; border-radius: 15px; color: white;">
+            <h4 style="margin:0 0 10px 0;">Développement Commercial</h4>
+            <h2 style="margin:0 0 5px 0;">{format_cfa(montant_commercial)}</h2>
+            <p style="margin:0; font-size: 0.9em;">{pct_commercial}% de l'investissement</p>
+            <hr style="border-color: rgba(255,255,255,0.3);">
+            <small>• Hausse CA visée : <b>+{hausse_ca}%</b></small><br>
+            <small>• CA additionnel : <b>{format_cfa(nouveau_ca - ca_actuel)}</b></small><br>
+            <small>• Coût marketing/an : <b>{format_cfa(montant_commercial * 0.2)}</b></small><br>
+            <small>• Nouveaux clients estimés : <b>+{hausse_ca // 5}%</b></small>
         </div>
         """, unsafe_allow_html=True)
-        
-    else:
+    
+    with col_impact3:
         st.markdown(f"""
-        <div class="alerte-box">
-        <b>RECOMMANDATION DÉFAVORABLE : Ne pas investir en l'état</b><br><br>
-        
-        L'investissement de <b>{format_cfa(augmentation)}</b> n'améliore pas suffisamment la situation.<br><br>
-        
-        Le résultat net ne progresse que de <b>{format_cfa(delta_resultat)}</b> (insuffisant)<br>
-        Le ROI est négatif ou trop faible ({roi:.1f}%)<br><br>
-        
-        <b>Actions à mener avant d'investir :</b><br>
-        • Réduire les charges fixes avant d'engager de nouveaux investissements<br>
-        • Optimiser la production actuelle pour améliorer la rentabilité<br>
-        • Chercher des financements alternatifs (subventions, crédits à taux réduit)
+        <div style="background: linear-gradient(135deg, #2ca02c, #00f2fe); 
+                    padding: 20px; border-radius: 15px; color: white;">
+            <h4 style="margin:0 0 10px 0;">Fonds de Roulement</h4>
+            <h2 style="margin:0 0 5px 0;">{format_cfa(montant_fdr)}</h2>
+            <p style="margin:0; font-size: 0.9em;">{pct_fdr}% de l'investissement</p>
+            <hr style="border-color: rgba(255,255,255,0.3);">
+            <small>• Stock sécurité : <b>{format_cfa(montant_fdr * 0.6)}</b></small><br>
+            <small>• Trésorerie : <b>{format_cfa(montant_fdr * 0.4)}</b></small><br>
+            <small>• Couvre <b>{point_mort_mois:.1f} mois</b> de charges fixes</small>
         </div>
         """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # ============================================
+    # ANALYSE DU SEUIL DE RENTABILITÉ
+    # ============================================
+    st.markdown("### Analyse du Seuil de Rentabilité")
+    
+    col_s1, col_s2 = st.columns([1, 1])
+    
+    with col_s1:
+        st.markdown(f"""
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; border: 1px solid #dee2e6;">
+            <b>Formule :</b> Seuil = Charges Fixes ÷ (1 - Charges Variables/CA)<br><br>
+            <b>Calcul :</b><br>
+            Charges Fixes : {format_cfa(nouvelles_charges_fixes)}<br>
+            Charges Variables : {nouveau_taux_cv:.1f}% du CA<br>
+            Marge sur CV : {marge_cv*100:.1f}%<br>
+            Seuil = {format_cfa(nouvelles_charges_fixes)} ÷ {marge_cv:.2f}<br>
+            <b>= {format_cfa(seuil_rentabilite)}</b>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_s2:
+        # Jauge de couverture
+        taux_couverture = (nouveau_ca / seuil_rentabilite * 100) if seuil_rentabilite > 0 else 0
+        
+        st.markdown(f"""
+        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; border: 1px solid #dee2e6;">
+            <b>Interprétation :</b><br><br>
+            CA Projeté : <b>{format_cfa(nouveau_ca)}</b><br>
+            Seuil : <b>{format_cfa(seuil_rentabilite)}</b><br>
+            Marge de sécurité : <b>{format_cfa(nouveau_ca - seuil_rentabilite)}</b><br>
+            Taux de couverture : <b>{taux_couverture:.0f}%</b><br>
+            Point mort atteint en : <b>{point_mort_mois:.1f} mois</b><br><br>
+            {"Situation CONFORTABLE" if taux_couverture > 150 else "Situation TENUE" if taux_couverture > 110 else "Situation RISQUÉE"}
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
     
     # ============================================
     # GRAPHIQUE COMPARATIF
     # ============================================
-    st.markdown("---")
     st.markdown("### Comparaison Visuelle")
     
-    fig_comp = go.Figure()
+    fig = go.Figure()
     
-    categories = ['Capital', 'CA Annuel', 'Résultat Net', 'Seuil Rentabilité']
-    valeurs_avant = [capital_actuel, ca_actuel_input, resultat_actuel, 
-                    charges_fixes / (1 - charges_var_pct/100) if (1 - charges_var_pct/100) > 0 else 0]
-    valeurs_apres = [nouveau_capital, nouveau_ca, nouveau_resultat, seuil_rentabilite]
+    categories = ['Capital', 'CA', 'Résultat Net', 'Charges Fixes', 'Seuil Rentab.']
+    valeurs_avant = [capital_actuel, ca_actuel, resultat_actuel, charges_fixes_actuelles, 
+                    charges_fixes_actuelles / (1 - taux_cv_base/100) if (1 - taux_cv_base/100) > 0 else 0]
+    valeurs_apres = [nouveau_capital, nouveau_ca, nouveau_resultat, nouvelles_charges_fixes, seuil_rentabilite]
     
-    fig_comp.add_trace(go.Bar(
-        x=categories,
-        y=valeurs_avant,
-        name='Avant Investissement',
-        marker_color='#ff7f0e',
-        textposition='none',
-        hovertemplate='<b>%{x}</b><br>Avant: %{customdata}<extra></extra>',
-        customdata=[format_cfa(v) for v in valeurs_avant]
-    ))
+    fig.add_trace(go.Bar(x=categories, y=valeurs_avant, name='Avant',
+                         marker_color='#ff7f0e', text=[format_cfa(v) for v in valeurs_avant],
+                         textposition='outside'))
+    fig.add_trace(go.Bar(x=categories, y=valeurs_apres, name='Après',
+                         marker_color='#2ca02c', text=[format_cfa(v) for v in valeurs_apres],
+                         textposition='outside'))
     
-    fig_comp.add_trace(go.Bar(
-        x=categories,
-        y=valeurs_apres,
-        name='Après Investissement',
-        marker_color='#2ca02c',
-        textposition='none',
-        hovertemplate='<b>%{x}</b><br>Après: %{customdata}<extra></extra>',
-        customdata=[format_cfa(v) for v in valeurs_apres]
-    ))
-    
-    fig_comp.update_layout(
-        title="Comparaison Avant / Après Investissement",
-        barmode='group',
-        template='plotly_white',
-        height=400,
-        hovermode='x unified'
+    fig.update_layout(
+        title="Avant / Après Investissement",
+        barmode='group', template='plotly_white', height=450,
+        hovermode='x unified',
+        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1)
     )
+    st.plotly_chart(fig, use_container_width=True)
     
-    st.plotly_chart(fig_comp, use_container_width=True)
+    st.markdown("---")
+    
+    # ============================================
+    # AVIS DÉCISIONNEL
+    # ============================================
+    st.markdown("### Avis Décisionnel")
+    
+    if nouveau_resultat > resultat_actuel and roi > 15 and delai_recup <= 3:
+        couleur, emoji, titre = "#d4edda", "FAVORABLE — Procéder à l'investissement"
+        arguments = f"""
+        • Résultat net en hausse de <b>{format_cfa(delta_resultat)}</b> (+{marge_nette_apres - marge_nette_avant:.1f} pts de marge)
+        • ROI de <b>{roi:.1f}%</b> (supérieur au minimum requis de 15%)
+        • Récupération en <b>{delai_recup:.1f} an(s)</b>
+        • Seuil de rentabilité couvert à <b>{taux_couverture:.0f}%</b>
+        """
+    elif nouveau_resultat > resultat_actuel:
+        couleur, emoji, titre = "#fff3cd", "MODÉRÉE — Approfondir l'analyse"
+        arguments = f"""
+        • Résultat net en hausse de <b>{format_cfa(delta_resultat)}</b>
+        • ROI de <b>{roi:.1f}%</b> (inférieur au seuil optimal)
+        • Délai de récupération de <b>{delai_recup:.1f} ans</b>
+        • Revoir l'affectation ou négocier les charges
+        """
+    else:
+        couleur, emoji, titre = "#f8d7da", "DÉFAVORABLE — Ne pas investir en l'état"
+        arguments = f"""
+        • Résultat net insuffisant : <b>{format_cfa(delta_resultat)}</b>
+        • ROI de <b>{roi:.1f}%</b>
+        • Réduire les charges fixes avant d'investir
+        • Chercher des financements alternatifs
+        """
+    
+    st.markdown(f"""
+    <div style="background-color: {couleur}; padding: 25px; border-radius: 15px; border: 2px solid #ccc;">
+        <h2 style="margin-top: 0;">{emoji} RECOMMANDATION {titre}</h2>
+        <p style="font-size: 1.1em;">
+        {arguments}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ==========================================================
 # FOOTER
