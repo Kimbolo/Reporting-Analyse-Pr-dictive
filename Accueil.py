@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 from db import get_data
@@ -96,10 +97,10 @@ if facture is None or facture.empty:
 with st.sidebar:
     st.markdown("## Période d'analyse")
     
-    annees_dispo = sorted(facture['ANNEE'].dropna().unique(), reverse=True)
+    annees_dispo = list(np.sort(facture['ANNEE'].dropna().unique())[::-1])
     annee = st.selectbox("Année", annees_dispo, index=0)
     
-    mois_dispo = sorted(facture[facture['ANNEE'] == annee]['MOIS'].unique())
+    mois_dispo = list(np.sort(facture[facture['ANNEE'] == annee]['MOIS'].unique()))
     mois_sel = st.multiselect(
         "Mois",
         mois_dispo,
@@ -519,7 +520,7 @@ if st.button("Lancer la Simulation Financière", type="primary", use_container_w
         st.markdown(f"""
         <div style="background: linear-gradient(135deg, #1f77b4, #4facfe); 
                     padding: 20px; border-radius: 15px; color: white;">
-            <h4 style="margin:0 0 10px 0;">Outil Productif</h4>
+            <h4 style="margin:0 0 10px 0;"> Outil Productif</h4>
             <h2 style="margin:0 0 5px 0;">{format_cfa(montant_production)}</h2>
             <p style="margin:0; font-size: 0.9em;">{pct_production}% de l'investissement</p>
             <hr style="border-color: rgba(255,255,255,0.3);">
@@ -560,6 +561,259 @@ if st.button("Lancer la Simulation Financière", type="primary", use_container_w
         """, unsafe_allow_html=True)
     
     st.markdown("---")
+
+    st.markdown("---")
+    
+    # ============================================
+    # DÉTAIL DES INVESTISSEMENTS PAR PRODUIT/SAVEUR
+    # ============================================
+    st.markdown("### Détail des Investissements par Produit & Saveur")
+    st.caption("Répartition stratégique des ressources pour maximiser le retour sur investissement")
+    
+    # Produits N'NAM avec données de marché
+    produits_data = {
+        "Jus d'Ananas": {
+            "part_marche": 28, "marge": 55, "croissance": "+12%", "saison": "Mars-Juillet",
+            "investissement_recommande": 25, "potentiel": "Très fort",
+            "actions": ["Nouvelle ligne d'embouteillage", "Campagne digitale", "Partenariat distributeurs"],
+            "ca_actuel_estime": ca_actuel * 0.28,
+            "ca_additionnel_estime": ca_actuel * 0.28 * 0.12
+        },
+        "Jus de Gingembre": {
+            "part_marche": 22, "marge": 60, "croissance": "+18%", "saison": "Toute l'année",
+            "investissement_recommande": 20, "potentiel": "Très fort",
+            "actions": ["Renforcement marketing", "Nouveaux conditionnements", "Export sous-région"],
+            "ca_actuel_estime": ca_actuel * 0.22,
+            "ca_additionnel_estime": ca_actuel * 0.22 * 0.18
+        },
+        "Jus de Baobab": {
+            "part_marche": 18, "marge": 65, "croissance": "+25%", "saison": "Toute l'année",
+            "investissement_recommande": 20, "potentiel": "Excellent",
+            "actions": ["Labellisation bio", "Certification export", "Partenariats internationaux"],
+            "ca_actuel_estime": ca_actuel * 0.18,
+            "ca_additionnel_estime": ca_actuel * 0.18 * 0.25
+        },
+        "Jus de Bissap": {
+            "part_marche": 15, "marge": 50, "croissance": "+8%", "saison": "Novembre-Février",
+            "investissement_recommande": 15, "potentiel": "Fort",
+            "actions": ["Développement recettes", "Packaging premium", "Réseau hôtels/restaurants"],
+            "ca_actuel_estime": ca_actuel * 0.15,
+            "ca_additionnel_estime": ca_actuel * 0.15 * 0.08
+        },
+        "Jus de Tamarin": {
+            "part_marche": 10, "marge": 58, "croissance": "+15%", "saison": "Janvier-Avril",
+            "investissement_recommande": 10, "potentiel": "Bon",
+            "actions": ["Notoriété de la saveur", "Dégustations points de vente", "Communication santé"],
+            "ca_actuel_estime": ca_actuel * 0.10,
+            "ca_additionnel_estime": ca_actuel * 0.10 * 0.15
+        },
+        "Jus de Citron": {
+            "part_marche": 7, "marge": 48, "croissance": "+5%", "saison": "Novembre-Février",
+            "investissement_recommande": 10, "potentiel": "Modéré",
+            "actions": ["Optimisation coûts", "Vente en gros", "Marché professionnel"],
+            "ca_actuel_estime": ca_actuel * 0.07,
+            "ca_additionnel_estime": ca_actuel * 0.07 * 0.05
+        },
+    }
+    
+    # ============================================
+    # TABLEAU DÉTAILLÉ PAR PRODUIT
+    # ============================================
+    st.markdown("#### Matrice d'Investissement par Produit")
+    
+    matrice_data = []
+    for produit, data in produits_data.items():
+        montant_investi = montant_production * data['investissement_recommande'] / 100
+        ca_add = data['ca_additionnel_estime']
+        roi_produit = (ca_add * data['marge'] / 100) / montant_investi * 100 if montant_investi > 0 else 0
+        
+        matrice_data.append({
+            'Produit': produit,
+            'Part de Marché': f"{data['part_marche']}%",
+            'Marge Brute': f"{data['marge']}%",
+            'Croissance': data['croissance'],
+            'Saison Forte': data['saison'],
+            'Invest. Recommandé': f"{data['investissement_recommande']}%",
+            'Montant Investi': format_cfa(montant_investi),
+            'CA Additionnel Estimé': format_cfa(ca_add),
+            'ROI Produit': f"{roi_produit:.1f}%",
+            'Potentiel': data['potentiel']
+        })
+    
+    df_matrice = pd.DataFrame(matrice_data)
+    
+    st.dataframe(
+        df_matrice,
+        use_container_width=True, hide_index=True,
+        column_config={
+            'Produit': st.column_config.TextColumn('Produit', width='medium'),
+            'Part de Marché': 'Part Marché',
+            'Marge Brute': 'Marge',
+            'Croissance': 'Croiss.',
+            'Saison Forte': 'Saison',
+            'Invest. Recommandé': 'Invest. %',
+            'Montant Investi': 'Montant',
+            'CA Additionnel Estimé': 'CA Additionnel',
+            'ROI Produit': st.column_config.TextColumn('ROI', width='small'),
+            'Potentiel': 'Potentiel'
+        }
+    )
+    
+    st.markdown("---")
+    
+    # ============================================
+    # RÉPARTITION VISUELLE DU CAPITAL PAR PRODUIT
+    # ============================================
+    st.markdown("#### Répartition du Capital Productif par Produit")
+    
+    col_chart1, col_chart2 = st.columns([1, 1])
+    
+    with col_chart1:
+        # Treemap des investissements
+        treemap_data = []
+        for produit, data in produits_data.items():
+            treemap_data.append({
+                'Produit': produit,
+                'Investissement': montant_production * data['investissement_recommande'] / 100,
+                'CA Additionnel': data['ca_additionnel_estime'],
+                'ROI': (data['ca_additionnel_estime'] * data['marge'] / 100) / 
+                       (montant_production * data['investissement_recommande'] / 100) * 100 
+                       if (montant_production * data['investissement_recommande'] / 100) > 0 else 0
+            })
+        
+        df_treemap = pd.DataFrame(treemap_data)
+        
+        fig_treemap = px.treemap(
+            df_treemap,
+            path=['Produit'],
+            values='Investissement',
+            color='ROI',
+            color_continuous_scale='RdYlGn',
+            title="Répartition de l'investissement productif par produit",
+            hover_data={'Investissement': ':,d', 'CA Additionnel': ':,d', 'ROI': ':.1f'}
+        )
+        fig_treemap.update_layout(height=400)
+        st.plotly_chart(fig_treemap, use_container_width=True)
+    
+    with col_chart2:
+        # Graphique ROI par produit
+        roi_data = []
+        for produit, data in produits_data.items():
+            montant = montant_production * data['investissement_recommande'] / 100
+            ca_add = data['ca_additionnel_estime']
+            roi_prod = (ca_add * data['marge'] / 100) / montant * 100 if montant > 0 else 0
+            roi_data.append({'Produit': produit, 'ROI': roi_prod, 'Investissement': montant})
+        
+        df_roi = pd.DataFrame(roi_data).sort_values('ROI', ascending=True)
+        
+        fig_roi = px.bar(
+            df_roi,
+            x='ROI', y='Produit', orientation='h',
+            color='ROI', color_continuous_scale='RdYlGn',
+            title="ROI estimé par produit",
+            text=df_roi['ROI'].apply(lambda x: f"{x:.1f}%"),
+            labels={'ROI': 'ROI (%)', 'Produit': ''}
+        )
+        fig_roi.update_traces(textposition='outside')
+        fig_roi.update_layout(height=400, yaxis={'categoryorder': 'total ascending'})
+        st.plotly_chart(fig_roi, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # ============================================
+    # PLAN D'ACTION DÉTAILLÉ PAR PRODUIT
+    # ============================================
+    st.markdown("#### Plan d'Action par Produit")
+    
+    for produit, data in produits_data.items():
+        with st.expander(f" {produit} — {data['potentiel']} ({data['investissement_recommande']}% de l'investissement)", expanded=False):
+            
+            col_p1, col_p2 = st.columns([1, 2])
+            
+            with col_p1:
+                st.markdown(f"""
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 10px;">
+                    <b> Chiffres clés</b><br><br>
+                    Part de marché : <b>{data['part_marche']}%</b><br>
+                    Marge brute : <b>{data['marge']}%</b><br>
+                    Croissance : <b>{data['croissance']}</b><br>
+                    Saison forte : <b>{data['saison']}</b><br>
+                    CA actuel estimé : <b>{format_cfa(data['ca_actuel_estime'])}</b><br>
+                    CA additionnel : <b>{format_cfa(data['ca_additionnel_estime'])}</b><br>
+                    Invest. alloué : <b>{format_cfa(montant_production * data['investissement_recommande'] / 100)}</b>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col_p2:
+                st.markdown("** Actions recommandées :**")
+                for i, action in enumerate(data['actions']):
+                    st.markdown(f"**{i+1}.** {action}")
+                
+                st.markdown("---")
+                st.markdown("** Résultats attendus :**")
+                
+                invest_produit = montant_production * data['investissement_recommande'] / 100
+                gain_net = data['ca_additionnel_estime'] * data['marge'] / 100
+                roi_action = gain_net / invest_produit * 100 if invest_produit > 0 else 0
+                
+                st.markdown(f"""
+                • CA additionnel : **{format_cfa(data['ca_additionnel_estime'])}**
+                • Gain net estimé : **{format_cfa(gain_net)}**
+                • ROI de l'action : **{roi_action:.1f}%**
+                • Point mort : **{invest_produit / (gain_net / 12):.1f} mois** si gain > 0
+                """)
+    
+    st.markdown("---")
+    
+    # ============================================
+    # COMPARAISON DES SCÉNARIOS D'INVESTISSEMENT
+    # ============================================
+    st.markdown("### Comparaison des Scénarios d'Investissement")
+    st.caption("Simulez différentes répartitions pour optimiser votre retour")
+    
+    col_sc1, col_sc2, col_sc3 = st.columns(3)
+    
+    with col_sc1:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #1f77b4, #4facfe); 
+                    padding: 20px; border-radius: 15px; color: white;">
+            <h4 style="margin:0 0 10px 0;"> Scénario PRUDENT</h4>
+            <p style="margin:0;">Focaliser sur les 2 produits phares</p>
+            <hr style="border-color: rgba(255,255,255,0.3);">
+            <b>Ananas : 40% | Gingembre : 35%</b><br>
+            Autres : 25%<br><br>
+            <b>CA estimé : """ + format_cfa(nouveau_ca * 0.85) + """</b><br>
+            <small>Risque faible — Croissance modérée</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_sc2:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #ff7f0e, #f5576c); 
+                    padding: 20px; border-radius: 15px; color: white;">
+            <h4 style="margin:0 0 10px 0;"> Scénario CROISSANCE</h4>
+            <p style="margin:0;">Répartition équilibrée</p>
+            <hr style="border-color: rgba(255,255,255,0.3);">
+            <b>Tous produits selon part de marché</b><br>
+            Nouveaux emballages inclus<br><br>
+            <b>CA estimé : """ + format_cfa(nouveau_ca) + """</b><br>
+            <small>Risque modéré — Croissance cible</small>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_sc3:
+        st.markdown("""
+        <div style="background: linear-gradient(135deg, #2ca02c, #00f2fe); 
+                    padding: 20px; border-radius: 15px; color: white;">
+            <h4 style="margin:0 0 10px 0;"> Scénario AMBITIEUX</h4>
+            <p style="margin:0;">Forte diversification + export</p>
+            <hr style="border-color: rgba(255,255,255,0.3);">
+            <b>Baobab : 30% | Gingembre : 30%</b><br>
+            Bissap : 20% | Export : 20%<br><br>
+            <b>CA estimé : """ + format_cfa(nouveau_ca * 1.2) + """</b><br>
+            <small>Risque élevé — Fort potentiel</small>
+        </div>
+        """, unsafe_allow_html=True)
     
     # ============================================
     # ANALYSE DU SEUIL DE RENTABILITÉ
@@ -628,45 +882,6 @@ if st.button("Lancer la Simulation Financière", type="primary", use_container_w
     
     st.markdown("---")
     
-    # ============================================
-    # AVIS DÉCISIONNEL
-    # ============================================
-    st.markdown("### Avis Décisionnel")
-    
-    if nouveau_resultat > resultat_actuel and roi > 15 and delai_recup <= 3:
-        couleur, emoji, titre = "#d4edda", "FAVORABLE — Procéder à l'investissement"
-        arguments = f"""
-        • Résultat net en hausse de <b>{format_cfa(delta_resultat)}</b> (+{marge_nette_apres - marge_nette_avant:.1f} pts de marge)
-        • ROI de <b>{roi:.1f}%</b> (supérieur au minimum requis de 15%)
-        • Récupération en <b>{delai_recup:.1f} an(s)</b>
-        • Seuil de rentabilité couvert à <b>{taux_couverture:.0f}%</b>
-        """
-    elif nouveau_resultat > resultat_actuel:
-        couleur, emoji, titre = "#fff3cd", "MODÉRÉE — Approfondir l'analyse"
-        arguments = f"""
-        • Résultat net en hausse de <b>{format_cfa(delta_resultat)}</b>
-        • ROI de <b>{roi:.1f}%</b> (inférieur au seuil optimal)
-        • Délai de récupération de <b>{delai_recup:.1f} ans</b>
-        • Revoir l'affectation ou négocier les charges
-        """
-    else:
-        couleur, emoji, titre = "#f8d7da", "DÉFAVORABLE — Ne pas investir en l'état"
-        arguments = f"""
-        • Résultat net insuffisant : <b>{format_cfa(delta_resultat)}</b>
-        • ROI de <b>{roi:.1f}%</b>
-        • Réduire les charges fixes avant d'investir
-        • Chercher des financements alternatifs
-        """
-    
-    st.markdown(f"""
-    <div style="background-color: {couleur}; padding: 25px; border-radius: 15px; border: 2px solid #ccc;">
-        <h2 style="margin-top: 0;">{emoji} RECOMMANDATION {titre}</h2>
-        <p style="font-size: 1.1em;">
-        {arguments}
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-
 # ==========================================================
 # FOOTER
 # ==========================================================
